@@ -1,0 +1,17 @@
+---
+- name: Install common packages
+  ansible.builtin.apt:
+    name:
+      - curl
+      - vim
+      - python3
+      - python3-apt
+      - ca-certificates
+    state: present
+    update_cache: true
+
+- name: Ensure project root exists on target
+  ansible.builtin.file:
+    path: "{{ project_root_on_target }}"
+    state: directory
+    mode: "0755"

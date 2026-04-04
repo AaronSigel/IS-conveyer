@@ -1,0 +1,7 @@
+project_name: ib-host-audit-poc
+profile_name: host-baseline-v1
+wazuh_manager_ip: 192.168.56.10
+ansible_user: vagrant
+ansible_ssh_private_key_file: "~/.vagrant.d/insecure_private_key"
+ansible_python_interpreter: /usr/bin/python3
+project_root_on_target: /opt/ib-host-audit-poc

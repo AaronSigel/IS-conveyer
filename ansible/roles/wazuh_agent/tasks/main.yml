@@ -1,0 +1,7 @@
+---
+- name: Declare Wazuh agent placeholder
+  ansible.builtin.debug:
+    msg:
+      - "Wazuh agent installation is out of scope for the current phase."
+      - "Reserved manager IP: {{ wazuh_agent_manager_ip }}"
+      - "Future package state: {{ wazuh_agent_package_state }}"

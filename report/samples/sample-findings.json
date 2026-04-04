@@ -1,0 +1,16 @@
+[
+  {
+    "host": "target1",
+    "source": "baseline-profile",
+    "category": "ssh",
+    "rule_id": "ssh-password-authentication-disabled",
+    "title": "PasswordAuthentication disabled",
+    "severity": "high",
+    "status": "fail",
+    "evidence": [
+      "Demo config indicates password authentication is enabled.",
+      "Target host contains /etc/ib-host-audit-poc/demo-app.conf"
+    ],
+    "remediation": "Set PasswordAuthentication to no and remove the demo override."
+  }
+]

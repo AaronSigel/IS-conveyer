@@ -1,0 +1,3 @@
+---
+wazuh_agent_manager_ip: "{{ wazuh_manager_ip }}"
+wazuh_agent_package_state: present

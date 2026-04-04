@@ -1,0 +1,14 @@
+---
+- name: Placeholder for future Wazuh integration
+  hosts: wazuh:targets
+  become: true
+  vars_files:
+    - ../group_vars/all.yml
+
+  roles:
+    - role: wazuh_agent
+
+  tasks:
+    - name: Report current Wazuh integration state
+      ansible.builtin.debug:
+        msg: "Wazuh integration is intentionally deferred for this stage."

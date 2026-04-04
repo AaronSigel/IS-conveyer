@@ -1,0 +1,36 @@
+---
+- name: Create directories for baseline assets
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: "0755"
+  loop:
+    - "{{ project_root_on_target }}/profiles"
+    - /etc/ib-host-audit-poc
+
+- name: Deploy profile files to target hosts
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../../profiles/{{ item }}"
+    dest: "{{ project_root_on_target }}/profiles/{{ item | basename }}"
+    mode: "0644"
+  loop:
+    - host-baseline-v1.yml
+    - allowed-software.yml
+
+- name: Deploy demo application configuration
+  ansible.builtin.copy:
+    src: demo-app.conf
+    dest: /etc/ib-host-audit-poc/demo-app.conf
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Create intentionally permissive sensitive file for PoC checks
+  ansible.builtin.copy:
+    dest: /etc/ib-host-audit-poc/demo-sensitive.conf
+    content: |
+      DEMO_SECRET=replace-me
+      PURPOSE=Used to validate permissions checks in the PoC
+    owner: root
+    group: root
+    mode: "0644"
