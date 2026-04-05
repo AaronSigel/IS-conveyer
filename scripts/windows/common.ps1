@@ -84,15 +84,9 @@ function Invoke-InWslRepo {
         "export VAGRANT_WSL_ENABLE_WINDOWS_ACCESS=1"
         "export VAGRANT_INSECURE_PRIVATE_KEY='$keyWslPath'"
         "mkdir -p '$wrapperDir'"
-        "cat > '$wrapperDir/vagrant' <<'EOF'" + @"
-#!/usr/bin/env bash
-exec '$vagrantExeWslPath' "`$@"
-"@ + "EOF"
+        ('printf ''%s\n'' ''#!/usr/bin/env bash'' ''exec "' + $vagrantExeWslPath + '" "$@"'' > "' + $wrapperDir + '/vagrant"')
         "chmod +x '$wrapperDir/vagrant'"
-        "cat > '$wrapperDir/VBoxManage' <<'EOF'" + @"
-#!/usr/bin/env bash
-exec '$virtualBoxExeWslPath' "`$@"
-"@ + "EOF"
+        ('printf ''%s\n'' ''#!/usr/bin/env bash'' ''exec "' + $virtualBoxExeWslPath + '" "$@"'' > "' + $wrapperDir + '/VBoxManage"')
         "chmod +x '$wrapperDir/VBoxManage'"
         ('export PATH="' + $wrapperDir + ':$PATH:' + $vagrantBinDir + ':' + $virtualBoxBinDir + '"')
         "cd '$repoWslPath'"
