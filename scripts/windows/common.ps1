@@ -48,6 +48,20 @@ function Quote-ForBash {
     return "'" + $Value.Replace("'", "'\''") + "'"
 }
 
+function Get-WindowsCommandPath {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$CommandName
+    )
+
+    $command = Get-Command $CommandName -ErrorAction SilentlyContinue
+    if (-not $command) {
+        throw "'$CommandName' is not available on Windows PATH."
+    }
+
+    return $command.Source
+}
+
 function Invoke-InWslRepo {
     param(
         [Parameter(Mandatory = $true)]
@@ -59,10 +73,17 @@ function Invoke-InWslRepo {
     $resolvedDistro = Get-WslDistroName -Distro $Distro
     $repoWslPath = Convert-WindowsPathToWsl -Path $RepoRoot
     $keyWslPath = Convert-WindowsPathToWsl -Path (Get-VagrantKeyWindowsPath)
+    $vagrantExeWslPath = Convert-WindowsPathToWsl -Path (Get-WindowsCommandPath -CommandName "vagrant.exe")
+    $virtualBoxExeWslPath = Convert-WindowsPathToWsl -Path (Get-WindowsCommandPath -CommandName "VBoxManage.exe")
+    $vagrantBinDir = Split-Path $vagrantExeWslPath -Parent
+    $virtualBoxBinDir = Split-Path $virtualBoxExeWslPath -Parent
 
     $linuxCommand = @(
         "export VAGRANT_WSL_ENABLE_WINDOWS_ACCESS=1"
         "export VAGRANT_INSECURE_PRIVATE_KEY='$keyWslPath'"
+        "export PATH=`"$PATH:$vagrantBinDir:$virtualBoxBinDir`""
+        "alias vagrant='vagrant.exe'"
+        "alias VBoxManage='VBoxManage.exe'"
         "cd '$repoWslPath'"
         $Command
     ) -join "; "
