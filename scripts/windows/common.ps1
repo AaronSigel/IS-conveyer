@@ -78,18 +78,26 @@ function Invoke-InWslRepo {
     $vagrantBinDir = Split-Path $vagrantExeWslPath -Parent
     $virtualBoxBinDir = Split-Path $virtualBoxExeWslPath -Parent
     $wrapperDir = "/tmp/is-conveyer-windows-bin"
+    $wrapperDirQuoted = Quote-ForBash -Value $wrapperDir
+    $vagrantWrapperPathQuoted = Quote-ForBash -Value "$wrapperDir/vagrant"
+    $virtualBoxWrapperPathQuoted = Quote-ForBash -Value "$wrapperDir/VBoxManage"
+    $shebangQuoted = Quote-ForBash -Value "#!/usr/bin/env bash"
+    $vagrantExecLineQuoted = Quote-ForBash -Value ('exec "' + $vagrantExeWslPath + '" "$@"')
+    $virtualBoxExecLineQuoted = Quote-ForBash -Value ('exec "' + $virtualBoxExeWslPath + '" "$@"')
+    $repoWslPathQuoted = Quote-ForBash -Value $repoWslPath
+    $keyWslPathQuoted = Quote-ForBash -Value $keyWslPath
 
     $linuxCommand = @(
         "set -euo pipefail"
         "export VAGRANT_WSL_ENABLE_WINDOWS_ACCESS=1"
-        "export VAGRANT_INSECURE_PRIVATE_KEY='$keyWslPath'"
-        "mkdir -p '$wrapperDir'"
-        ('printf ''%s\n'' ''#!/usr/bin/env bash'' ''exec "' + $vagrantExeWslPath + '" "$@"'' > "' + $wrapperDir + '/vagrant"')
-        "chmod +x '$wrapperDir/vagrant'"
-        ('printf ''%s\n'' ''#!/usr/bin/env bash'' ''exec "' + $virtualBoxExeWslPath + '" "$@"'' > "' + $wrapperDir + '/VBoxManage"')
-        "chmod +x '$wrapperDir/VBoxManage'"
+        ("export VAGRANT_INSECURE_PRIVATE_KEY=" + $keyWslPathQuoted)
+        ("mkdir -p " + $wrapperDirQuoted)
+        ("printf '%s\n' " + $shebangQuoted + " " + $vagrantExecLineQuoted + " > " + $vagrantWrapperPathQuoted)
+        ("chmod +x " + $vagrantWrapperPathQuoted)
+        ("printf '%s\n' " + $shebangQuoted + " " + $virtualBoxExecLineQuoted + " > " + $virtualBoxWrapperPathQuoted)
+        ("chmod +x " + $virtualBoxWrapperPathQuoted)
         ('export PATH="' + $wrapperDir + ':$PATH:' + $vagrantBinDir + ':' + $virtualBoxBinDir + '"')
-        "cd '$repoWslPath'"
+        ("cd " + $repoWslPathQuoted)
         $Command
     ) -join "; "
 
