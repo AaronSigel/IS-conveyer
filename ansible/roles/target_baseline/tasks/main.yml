@@ -25,12 +25,56 @@
     group: root
     mode: "0644"
 
-- name: Create intentionally permissive sensitive file for PoC checks
+- name: Install packages required in both baseline modes
+  ansible.builtin.apt:
+    name:
+      - ufw
+    state: present
+    update_cache: true
+
+- name: Remove forbidden packages when remediation mode is enabled
+  ansible.builtin.apt:
+    name: "{{ target_baseline_forbidden_packages }}"
+    state: absent
+    purge: true
+  when: target_baseline_apply_remediation
+
+- name: Install host-specific drift package set
+  ansible.builtin.apt:
+    name: "{{ target_baseline_drift_packages[inventory_hostname] | default([]) }}"
+    state: present
+  when: not target_baseline_apply_remediation
+
+- name: Configure drift or compliant SSH settings
   ansible.builtin.copy:
-    dest: /etc/ib-host-audit-poc/demo-sensitive.conf
+    dest: "{{ target_baseline_ssh_override_path }}"
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      # Managed by target_baseline role
+      PermitRootLogin {{ 'no' if target_baseline_apply_remediation else 'yes' }}
+      PasswordAuthentication {{ 'no' if target_baseline_apply_remediation else 'yes' }}
+  notify: Restart ssh
+
+- name: Allow SSH through UFW before enabling the firewall
+  ansible.builtin.command:
+    cmd: ufw allow OpenSSH
+  when: target_baseline_apply_remediation
+  changed_when: false
+
+- name: Ensure UFW state matches the requested baseline mode
+  ansible.builtin.command:
+    cmd: "{{ 'ufw --force enable' if target_baseline_apply_remediation else 'ufw disable' }}"
+  register: target_baseline_ufw_command
+  changed_when: "'Firewall is active' in target_baseline_ufw_command.stdout or 'Firewall stopped' in target_baseline_ufw_command.stdout"
+
+- name: Create sensitive file for SCA checks
+  ansible.builtin.copy:
+    dest: "{{ target_baseline_sensitive_file }}"
     content: |
       DEMO_SECRET=replace-me
       PURPOSE=Used to validate permissions checks in the PoC
     owner: root
     group: root
-    mode: "0644"
+    mode: "{{ target_baseline_sensitive_mode_compliant if target_baseline_apply_remediation else target_baseline_sensitive_mode_drift[inventory_hostname] }}"

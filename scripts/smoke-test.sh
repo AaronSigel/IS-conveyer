@@ -12,3 +12,35 @@ vagrant ssh wazuh -c "echo wazuh-ok"
 vagrant ssh target1 -c "echo target1-ok"
 vagrant ssh target2 -c "echo target2-ok"
 ansible all -i "${INVENTORY}" -m ping
+
+INDEXER_PASS_FILE="${PROJECT_ROOT}/artifacts/wazuh-indexer-password.txt"
+if [[ -f "${INDEXER_PASS_FILE}" ]]; then
+  INDEXER_PASS="$(tr -d '\n' < "${INDEXER_PASS_FILE}")"
+  for attempt in $(seq 1 20); do
+    count="$(
+      ssh -F /dev/null \
+        -o UserKnownHostsFile=/dev/null \
+        -o StrictHostKeyChecking=no \
+        -i /home/funder/.vagrant.d/insecure_private_keys/vagrant.key.ed25519 \
+        -i /home/funder/.vagrant.d/insecure_private_keys/vagrant.key.rsa \
+        -p 2222 \
+        vagrant@127.0.0.1 \
+        "sudo curl -sk -u admin:${INDEXER_PASS} https://127.0.0.1:9200/wazuh-states-vulnerabilities*/_count" \
+        2>/dev/null | python3 -c 'import json,sys; print(json.load(sys.stdin).get("count", 0))'
+    )"
+
+    if [[ "${count}" =~ ^[0-9]+$ ]] && (( count > 0 )); then
+      break
+    fi
+
+    if (( attempt == 20 )); then
+      echo "wazuh-vulnerabilities-empty"
+      exit 1
+    fi
+
+    sleep 15
+  done
+fi
+
+python3 scripts/export-findings.py
+python3 scripts/generate-report.py

@@ -1,3 +1,9 @@
 ---
 wazuh_agent_manager_ip: "{{ wazuh_manager_ip }}"
 wazuh_agent_package_state: present
+wazuh_agent_repo_file: /etc/apt/sources.list.d/wazuh.list
+wazuh_agent_gpg_keyring: /usr/share/keyrings/wazuh.gpg
+wazuh_agent_service_name: wazuh-agent
+wazuh_agent_shared_dir: /var/ossec/etc/shared
+wazuh_agent_shared_dir_mode: "0770"
+wazuh_agent_local_internal_options_path: /var/ossec/etc/local_internal_options.conf

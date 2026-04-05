@@ -1,14 +1,18 @@
 ---
-- name: Placeholder for future Wazuh integration
-  hosts: wazuh:targets
+- name: Install and configure Wazuh minimal manager
+  hosts: wazuh
+  become: true
+  vars_files:
+    - ../group_vars/all.yml
+
+  roles:
+    - role: wazuh_manager
+
+- name: Install and enroll Wazuh agents
+  hosts: targets
   become: true
   vars_files:
     - ../group_vars/all.yml
 
   roles:
     - role: wazuh_agent
-
-  tasks:
-    - name: Report current Wazuh integration state
-      ansible.builtin.debug:
-        msg: "Wazuh integration is intentionally deferred for this stage."

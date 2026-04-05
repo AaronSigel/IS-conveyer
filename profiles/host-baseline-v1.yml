@@ -55,4 +55,4 @@ denylist:
   packages:
     - telnet
     - telnetd
-    - rsh-client
+    - rsh-redone-client

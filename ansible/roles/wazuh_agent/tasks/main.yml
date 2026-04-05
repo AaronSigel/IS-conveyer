@@ -1,7 +1,160 @@
 ---
-- name: Declare Wazuh agent placeholder
+- name: Install packages required for Wazuh repository
+  ansible.builtin.apt:
+    name:
+      - curl
+      - gnupg
+      - apt-transport-https
+    state: present
+    update_cache: true
+
+- name: Install Wazuh apt signing key
+  ansible.builtin.shell: |
+    set -euo pipefail
+    curl -s https://packages.wazuh.com/key/GPG-KEY-WAZUH | \
+      gpg --no-default-keyring --keyring gnupg-ring:{{ wazuh_agent_gpg_keyring }} --import
+    chmod 644 {{ wazuh_agent_gpg_keyring }}
+  args:
+    creates: "{{ wazuh_agent_gpg_keyring }}"
+    executable: /bin/bash
+
+- name: Configure Wazuh apt repository
+  ansible.builtin.copy:
+    dest: "{{ wazuh_agent_repo_file }}"
+    owner: root
+    group: root
+    mode: "0644"
+    content: "{{ wazuh_packages_repo_apt }}\n"
+
+- name: Update apt cache after adding Wazuh repository
+  ansible.builtin.apt:
+    update_cache: true
+
+- name: Install Wazuh agent package
+  ansible.builtin.apt:
+    name: wazuh-agent
+    state: "{{ wazuh_agent_package_state }}"
+  environment:
+    WAZUH_MANAGER: "{{ wazuh_agent_manager_ip }}"
+    WAZUH_AGENT_NAME: "{{ inventory_hostname }}"
+
+- name: Read the enrolled agent key from the manager
+  ansible.builtin.command:
+    cmd: "grep -E '^[0-9]+ {{ inventory_hostname }} ' /var/ossec/etc/client.keys"
+  delegate_to: "{{ groups['wazuh'][0] }}"
+  become: true
+  register: wazuh_agent_key_line
+  changed_when: false
+
+- name: Fail if the manager does not have an enrolled key for the agent
+  ansible.builtin.assert:
+    that:
+      - wazuh_agent_key_line.stdout | length > 0
+    fail_msg: "No enrolled agent key was found on the manager for {{ inventory_hostname }}"
+
+- name: Install the enrolled agent key locally
+  ansible.builtin.copy:
+    dest: /var/ossec/etc/client.keys
+    owner: root
+    group: wazuh
+    mode: "0640"
+    content: "{{ wazuh_agent_key_line.stdout }}\n"
+  notify: Restart Wazuh agent
+
+- name: Ensure local shared configuration directory exists on the agent
+  ansible.builtin.file:
+    path: "{{ wazuh_agent_shared_dir }}"
+    state: directory
+    owner: root
+    group: wazuh
+    mode: "{{ wazuh_agent_shared_dir_mode }}"
+
+- name: Allow remote command execution for custom SCA checks
+  ansible.builtin.lineinfile:
+    path: "{{ wazuh_agent_local_internal_options_path }}"
+    regexp: '^sca\.remote_commands='
+    line: 'sca.remote_commands=1'
+    owner: root
+    group: wazuh
+    mode: "0640"
+    create: true
+  notify: Restart Wazuh agent
+
+- name: Ensure local custom policy directory exists on the agent
+  ansible.builtin.file:
+    path: "{{ wazuh_agent_local_sca_policy_path | dirname }}"
+    state: directory
+    owner: root
+    group: wazuh
+    mode: "0750"
+
+- name: Disable agent-side syscheck for the lightweight PoC profile
+  ansible.builtin.replace:
+    path: /var/ossec/etc/ossec.conf
+    regexp: '(<syscheck>\s*<disabled>)no(</disabled>)'
+    replace: '\1yes\2'
+  notify: Restart Wazuh agent
+
+- name: Deploy local SCA policy to the agent
+  ansible.builtin.template:
+    src: host-baseline-v1-sca.yml.j2
+    dest: "{{ wazuh_agent_local_sca_policy_path }}"
+    owner: root
+    group: wazuh
+    mode: "0640"
+  notify: Restart Wazuh agent
+
+- name: Inject local Wazuh config block for fast SCA and inventory scans
+  ansible.builtin.blockinfile:
+    path: /var/ossec/etc/ossec.conf
+    marker: "<!-- {mark} {{ wazuh_agent_local_config_block_marker }} -->"
+    insertbefore: "</ossec_config>"
+    block: |2
+        <wodle name="syscollector">
+          <disabled>no</disabled>
+          <interval>2m</interval>
+          <scan_on_start>yes</scan_on_start>
+          <hardware>yes</hardware>
+          <os>yes</os>
+          <network>yes</network>
+          <packages>yes</packages>
+          <ports all="yes">yes</ports>
+          <processes>yes</processes>
+          <users>yes</users>
+          <groups>yes</groups>
+          <services>yes</services>
+          <browser_extensions>yes</browser_extensions>
+          <synchronization>
+            <max_eps>20</max_eps>
+          </synchronization>
+        </wodle>
+        <sca>
+          <enabled>yes</enabled>
+          <scan_on_start>yes</scan_on_start>
+          <interval>2m</interval>
+          <skip_nfs>yes</skip_nfs>
+          <policies>
+            <policy enabled="yes">{{ sca_policy_relpath }}</policy>
+          </policies>
+        </sca>
+  notify: Restart Wazuh agent
+
+- name: Ensure Wazuh agent service is enabled and started
+  ansible.builtin.systemd:
+    name: "{{ wazuh_agent_service_name }}"
+    enabled: true
+    state: started
+
+- name: Wait for agent service port binding
+  ansible.builtin.wait_for:
+    path: /var/ossec/var/run/wazuh-agentd.state
+    timeout: 300
+
+- name: Report current agent service state
+  ansible.builtin.command: "systemctl is-active {{ wazuh_agent_service_name }}"
+  register: wazuh_agent_service_state
+  changed_when: false
+
+- name: Show Wazuh agent service state
   ansible.builtin.debug:
-    msg:
-      - "Wazuh agent installation is out of scope for the current phase."
-      - "Reserved manager IP: {{ wazuh_agent_manager_ip }}"
-      - "Future package state: {{ wazuh_agent_package_state }}"
+    msg: "Agent {{ inventory_hostname }} service state: {{ wazuh_agent_service_state.stdout }}"
