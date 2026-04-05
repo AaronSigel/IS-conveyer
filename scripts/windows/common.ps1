@@ -81,7 +81,7 @@ function Invoke-InWslRepo {
     $linuxCommand = @(
         "export VAGRANT_WSL_ENABLE_WINDOWS_ACCESS=1"
         "export VAGRANT_INSECURE_PRIVATE_KEY='$keyWslPath'"
-        "export PATH=`"$PATH:$vagrantBinDir:$virtualBoxBinDir`""
+        ('export PATH="$PATH:' + $vagrantBinDir + ':' + $virtualBoxBinDir + '"')
         "alias vagrant='vagrant.exe'"
         "alias VBoxManage='VBoxManage.exe'"
         "cd '$repoWslPath'"
