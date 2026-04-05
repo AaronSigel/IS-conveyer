@@ -20,4 +20,6 @@ foreach ($arg in $ScriptArgs) {
     $arguments.Add($arg)
 }
 
+Write-Host "[windows-wrapper] Starting e2e pipeline"
+
 Invoke-WslScript -Distro $Distro -ScriptPath "./scripts/e2e.sh" -Arguments $arguments

@@ -77,18 +77,36 @@ function Invoke-InWslRepo {
     $virtualBoxExeWslPath = Convert-WindowsPathToWsl -Path (Get-WindowsCommandPath -CommandName "VBoxManage.exe")
     $vagrantBinDir = Split-Path $vagrantExeWslPath -Parent
     $virtualBoxBinDir = Split-Path $virtualBoxExeWslPath -Parent
+    $wrapperDir = "/tmp/is-conveyer-windows-bin"
 
     $linuxCommand = @(
+        "set -euo pipefail"
         "export VAGRANT_WSL_ENABLE_WINDOWS_ACCESS=1"
         "export VAGRANT_INSECURE_PRIVATE_KEY='$keyWslPath'"
-        ('export PATH="$PATH:' + $vagrantBinDir + ':' + $virtualBoxBinDir + '"')
-        "alias vagrant='vagrant.exe'"
-        "alias VBoxManage='VBoxManage.exe'"
+        "mkdir -p '$wrapperDir'"
+        "cat > '$wrapperDir/vagrant' <<'EOF'" + @"
+#!/usr/bin/env bash
+exec '$vagrantExeWslPath' "`$@"
+"@ + "EOF"
+        "chmod +x '$wrapperDir/vagrant'"
+        "cat > '$wrapperDir/VBoxManage' <<'EOF'" + @"
+#!/usr/bin/env bash
+exec '$virtualBoxExeWslPath' "`$@"
+"@ + "EOF"
+        "chmod +x '$wrapperDir/VBoxManage'"
+        ('export PATH="' + $wrapperDir + ':$PATH:' + $vagrantBinDir + ':' + $virtualBoxBinDir + '"')
         "cd '$repoWslPath'"
         $Command
     ) -join "; "
 
+    Write-Host "[windows-wrapper] WSL distro: $resolvedDistro"
+    Write-Host "[windows-wrapper] Repo path: $repoWslPath"
+    Write-Host "[windows-wrapper] Command: $Command"
+
     & wsl.exe -d $resolvedDistro -- bash -lc $linuxCommand
+    if ($LASTEXITCODE -ne 0) {
+        throw "WSL command failed with exit code $LASTEXITCODE."
+    }
 }
 
 function Invoke-WslScript {
