@@ -10,7 +10,10 @@ wazuh_install_dir: /root/wazuh-install
 wazuh_assistant_config_path: "{{ wazuh_install_dir }}/config.yml"
 wazuh_password_archive_path: "{{ wazuh_install_dir }}/wazuh-install-files.tar"
 wazuh_passwords_output_path: "{{ wazuh_install_dir }}/wazuh-passwords.txt"
-wazuh_vd_updater_mount_path: /var/ossec/queue
+wazuh_data_mount_path: /srv/wazuh-data
+wazuh_vd_updater_mount_path: "{{ wazuh_data_mount_path }}/queue"
+wazuh_tmp_path: "{{ wazuh_data_mount_path }}/tmp"
+wazuh_logs_path: "{{ wazuh_data_mount_path }}/logs"
 wazuh_vd_updater_fs_label: wazuh-vd-updater
 wazuh_artifacts_dir: "{{ playbook_dir }}/../../artifacts"
 wazuh_api_user: wazuh
@@ -38,6 +41,6 @@ target_baseline_sensitive_mode_drift:
   target2: "0666"
 target_baseline_sensitive_mode_compliant: "0640"
 ansible_user: vagrant
-ansible_ssh_private_key_file: "~/.vagrant.d/insecure_private_key"
+ansible_ssh_private_key_file: "{{ lookup('env', 'VAGRANT_INSECURE_PRIVATE_KEY') | default('~/.vagrant.d/insecure_private_key', true) }}"
 ansible_python_interpreter: /usr/bin/python3
 project_root_on_target: /opt/ib-host-audit-poc

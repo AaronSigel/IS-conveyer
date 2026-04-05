@@ -1,6 +1,6 @@
 # ib-host-audit-poc
 
-Локальный PoC-стенд для проверки хостов по профилю ИБ на базе `Vagrant`, `VirtualBox` и `Ansible`.
+Локальный PoC-стенд для проверки хостов по профилю ИБ на базе `Vagrant`, `VirtualBox`, `Ansible` и `Wazuh`.
 
 ## Назначение
 
@@ -8,8 +8,8 @@
 
 - поднимает 3 виртуальные машины через `Vagrant`;
 - настраивается `Ansible` с хоста;
-- остаётся чистым с точки зрения Git;
-- уже включает облегчённый контур `Wazuh manager + agents + API + SCA + syscollector` для первого end-to-end цикла.
+- разворачивает `Wazuh manager`, `Wazuh agents`, `Wazuh API`, `Wazuh indexer` и `Wazuh dashboard`;
+- позволяет автономно пройти путь от старта VM до готового markdown-отчёта.
 
 ## Зависимости
 
@@ -27,44 +27,127 @@
 - Vagrant box: `cloud-image/ubuntu-24.04`
 - хостовая ОС разработки: Linux
 
+## Windows Host
+
+Для запуска на Windows используйте `WSL` как Linux control-plane, а `Vagrant` и `VirtualBox` оставляйте на стороне Windows.
+
+Подготовка WSL-окружения:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\windows\bootstrap-wsl.ps1
+```
+
+Полный запуск из Windows:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\windows\e2e.ps1
+```
+
+Доступные Windows-обёртки:
+
+```powershell
+.\scripts\windows\up.ps1
+.\scripts\windows\provision.ps1
+.\scripts\windows\smoke-test.ps1
+.\scripts\windows\run-host-scan.ps1 --hosts target1
+.\scripts\windows\scan-and-report.ps1
+.\scripts\windows\collect-report.ps1
+.\scripts\windows\capture-state.ps1
+.\scripts\windows\watch-state.ps1 5
+.\scripts\windows\destroy.ps1
+```
+
+Подробная инструкция по подготовке Windows-окружения лежит в [docs/windows-run.md](/home/funder/IS-project/docs/windows-run.md).
+
+Текущая модель Windows-запуска опирается на:
+- установленный `WSL`-дистрибутив `Ubuntu`;
+- установленные в Windows `Vagrant` и `VirtualBox`;
+- запуск репозитория с Windows-диска, чтобы `WSL` и Windows `Vagrant` работали с одними и теми же файлами;
+- `VAGRANT_WSL_ENABLE_WINDOWS_ACCESS=1`, который выставляется скриптом автоматически.
+
 ## Быстрый старт
+
+```bash
+./scripts/e2e.sh
+```
+
+Для Windows:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\windows\e2e.ps1
+```
+
+Проверенный сценарий запуска:
+
+1. Запустить полный автономный цикл через `./scripts/e2e.sh`.
+2. При необходимости повторно запускать только scan/report-контур через `./scripts/scan-and-report.sh`.
+3. При необходимости отдельно запускать scan trigger через `./scripts/run-host-scan.py`.
+4. При необходимости отдельно выгружать findings и собирать отчёт через `./scripts/collect-report.sh`.
+
+`e2e.sh` поднимает VM, выполняет provisioning, запускает smoke test и формирует итоговые artifacts/отчёт одним вызовом.
+
+```bash
+./scripts/e2e.sh
+./scripts/e2e.sh --hosts target1 --output-prefix target1-manual
+./scripts/e2e.sh --skip-smoke-test --timeout 900
+```
+
+Покомпонентный режим остаётся доступен:
 
 ```bash
 ./scripts/up.sh
 ./scripts/provision.sh
 ./scripts/smoke-test.sh
+./scripts/run-host-scan.py
+./scripts/collect-report.sh
 ```
-
-Проверенный сценарий запуска:
-
-1. Поднять VM через `./scripts/up.sh`.
-2. Применить конфигурацию через `./scripts/provision.sh`.
-3. Проверить доступность узлов через `./scripts/smoke-test.sh`.
-4. Запустить пользовательское сканирование и сбор отчёта через `./scripts/run-host-scan.py`.
-5. При необходимости отдельно выгрузить findings через `python3 scripts/export-findings.py`.
-6. Сгенерировать отчёт через `python3 scripts/generate-report.py`.
 
 Сканирование хостов и сбор итоговых отчётов:
 
 ```bash
-./scripts/run-host-scan.py
-./scripts/run-host-scan.py --hosts target1 --output-prefix target1-manual
+./scripts/scan-and-report.sh
+./scripts/scan-and-report.sh --hosts target1 --output-prefix target1-manual
 ```
 
 Что делает `run-host-scan.py`:
 
 - инициирует новое сканирование выбранных хостов через перезапуск `wazuh-agent`;
-- ждёт появления актуальных `SCA` и `syscollector` данных на manager;
+- ждёт появления актуальных `SCA` и `syscollector` данных на manager.
+
+Что делает `scan-and-report.sh`:
+
+- запускает scan trigger;
+- ждёт готовности новых данных;
+- вызывает сбор findings и генерацию отчёта.
+
+Что делает `collect-report.sh`:
+
 - выгружает unified findings;
 - сохраняет raw vulnerability snapshot из `Wazuh indexer`;
 - формирует итоговый markdown-отчёт.
+
+Наблюдение за состоянием стенда во время `provision` или `run-host-scan`:
+
+```bash
+./scripts/capture-state.sh
+./scripts/watch-state.sh
+./scripts/watch-state.sh 5
+```
+
+`capture-state.sh` делает разовый снимок:
+- `vagrant status`
+- загрузка дисков на manager
+- статусы `wazuh-manager/indexer/filebeat/dashboard`
+- хвосты `wazuh-install.log` и `ossec.log`
+- наличие и состояние `wazuh-agent` на `target1/target2`
+
+`watch-state.sh` повторяет этот снимок по кругу с интервалом в секундах.
 
 Сценарий повторной проверки после исправлений:
 
 ```bash
 ./scripts/provision.sh -e target_baseline_state=compliant
-python3 scripts/export-findings.py
-python3 scripts/generate-report.py
+./scripts/scan-and-report.sh
 ```
 
 ## Удаление стенда
@@ -89,17 +172,9 @@ python3 scripts/generate-report.py
 Подробности по архитектуре, формату профилей и демонстрационным сценариям лежат в [docs/architecture.md](/home/funder/IS-project/docs/architecture.md), [docs/profile-format.md](/home/funder/IS-project/docs/profile-format.md) и [docs/demo-scenarios.md](/home/funder/IS-project/docs/demo-scenarios.md).
 Правила нормализации findings описаны в [docs/normalization-rules.md](/home/funder/IS-project/docs/normalization-rules.md).
 
-## Minimal Wazuh Profile
-
-- На manager используется только `wazuh-manager` и `Wazuh API`.
-- `wazuh-indexer`, `filebeat` и `wazuh-dashboard` не входят в обязательный рабочий контур и отключаются в lightweight-режиме.
-- Findings для текущего PoC берутся из `Wazuh API`: `SCA` и `syscollector`.
-- `vulnerability detection` в этом профиле отключён, чтобы не раздувать диск manager VM.
-- В локальные artifacts экспортируются только API-реквизиты; dashboard-пароль в этом профиле не используется.
-
 ## Known Issues
 
 - `VirtualBox` может выводить warning о несовпадении версии `Guest Additions` внутри box и версии хоста.
 - На текущем PoC-стенде это предупреждение не блокирует `vagrant up`, provisioning и SSH-доступ.
 - При проблемах с shared folders следует обновить box или переинициализировать VM под версию `VirtualBox`, установленную на хосте.
-- В lightweight-режиме проект сознательно не поднимает полный стек `Wazuh indexer/dashboard`; проверка выполняется через `Wazuh API`, `SCA` и `syscollector`.
+- Полный cold-start `e2e` может занимать заметное время, так как manager устанавливает `Wazuh server`, `indexer` и `dashboard` с нуля.

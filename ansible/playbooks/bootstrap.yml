@@ -15,6 +15,28 @@
     - name: Gather facts after Python bootstrap
       ansible.builtin.setup:
 
+    - name: Free root filesystem space on fresh or partially installed Wazuh manager
+      ansible.builtin.shell: |
+        set -euo pipefail
+        apt-get clean
+        rm -rf /var/lib/apt/lists/*
+        rm -rf /var/cache/apt/archives/*
+
+        if [ -d /var/ossec ]; then
+          rm -rf /var/ossec/tmp/*
+
+          if ! mountpoint -q /var/ossec/queue; then
+            rm -rf \
+              /var/ossec/queue/vd_updater \
+              /var/ossec/queue/indexer \
+              /var/ossec/queue/vd
+          fi
+        fi
+      args:
+        executable: /bin/bash
+      changed_when: false
+      when: inventory_hostname in groups['wazuh']
+
     - name: Refresh apt cache
       ansible.builtin.apt:
         update_cache: true

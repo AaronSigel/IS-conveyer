@@ -2,6 +2,7 @@
 import argparse
 import base64
 import json
+import os
 import pathlib
 import ssl
 import subprocess
@@ -22,6 +23,7 @@ SCHEMA_PATH = PROJECT_ROOT / "report" / "schema" / "finding.schema.json"
 
 DEFAULT_TARGETS = ("target1", "target2")
 SCA_POLICY_ID = "host-baseline-v1"
+DEFAULT_VAGRANT_PRIVATE_KEY = os.environ.get("VAGRANT_INSECURE_PRIVATE_KEY", "~/.vagrant.d/insecure_private_key")
 SCA_RULES = {
     10001: {
         "rule_id": "ssh-permit-root-login-disabled",
@@ -156,7 +158,7 @@ class WazuhIndexerClient:
             "-o",
             "UserKnownHostsFile=/dev/null",
             "-i",
-            str(pathlib.Path("~/.vagrant.d/insecure_private_key").expanduser()),
+            str(pathlib.Path(DEFAULT_VAGRANT_PRIVATE_KEY).expanduser()),
             f"vagrant@{self.manager_ip}",
             (
                 "sudo curl -sk "

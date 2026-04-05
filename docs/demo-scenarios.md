@@ -3,20 +3,19 @@
 ## Сценарий 1. Поднятие стенда и подключение агентов
 
 ```bash
-./scripts/up.sh
-./scripts/provision.sh
+./scripts/e2e.sh --skip-smoke-test
 ```
 
 Ожидаемый результат:
 
 - `Vagrant` создаёт и запускает `wazuh`, `target1`, `target2`;
 - `Wazuh API` доступен на `https://192.168.56.10:55000`;
-- `target1` и `target2` зарегистрированы как active agents.
+- `target1` и `target2` зарегистрированы как agents на manager.
 
 ## Сценарий 2. Initial scan и выгрузка findings
 
 ```bash
-./scripts/run-host-scan.py
+./scripts/scan-and-report.sh
 ```
 
 Ожидаемый результат:
@@ -30,7 +29,7 @@
 ## Сценарий 2a. Отдельный отчёт по выбранному хосту
 
 ```bash
-./scripts/run-host-scan.py --hosts target1 --output-prefix target1-manual
+./scripts/scan-and-report.sh --hosts target1 --output-prefix target1-manual
 ```
 
 Ожидаемый результат:
@@ -44,7 +43,7 @@
 
 ```bash
 ./scripts/provision.sh -e target_baseline_state=compliant
-./scripts/run-host-scan.py
+./scripts/scan-and-report.sh
 ```
 
 Ожидаемый результат:
@@ -55,9 +54,23 @@
 
 ## Сценарий 4. Короткая демонстрация для защиты
 
-1. Выполнить `./scripts/up.sh` и `./scripts/provision.sh`.
+1. Выполнить `./scripts/e2e.sh`.
 2. Показать active agents и доступность manager.
-3. Выполнить `./scripts/run-host-scan.py`.
-4. Открыть `artifacts/unified-findings.json` и `artifacts/draft-report.md`.
+3. Открыть `artifacts/draft-report.md`.
+4. Показать `artifacts/unified-findings.json`.
 5. Выполнить `./scripts/provision.sh -e target_baseline_state=compliant`.
-6. Повторить `./scripts/run-host-scan.py` и показать уменьшение числа `fail`.
+6. Повторить `./scripts/scan-and-report.sh` и показать уменьшение числа `fail`.
+
+## Сценарий 5. Запуск под Windows
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\windows\bootstrap-wsl.ps1
+powershell -ExecutionPolicy Bypass -File .\scripts\windows\e2e.ps1
+```
+
+Ожидаемый результат:
+
+- Windows использует `WSL` как control-plane;
+- `Vagrant` и `VirtualBox` работают на стороне Windows;
+- итоговые артефакты появляются в каталоге `artifacts` репозитория;
+- сценарий функционально повторяет Linux `./scripts/e2e.sh`.

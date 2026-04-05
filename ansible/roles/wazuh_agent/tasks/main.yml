@@ -38,13 +38,64 @@
     WAZUH_MANAGER: "{{ wazuh_agent_manager_ip }}"
     WAZUH_AGENT_NAME: "{{ inventory_hostname }}"
 
-- name: Read the enrolled agent key from the manager
-  ansible.builtin.command:
-    cmd: "grep -E '^[0-9]+ {{ inventory_hostname }} ' /var/ossec/etc/client.keys"
+- name: Ensure the agent is enrolled on the manager and read its key
+  ansible.builtin.shell: |
+    set -euo pipefail
+
+    agent_name='{{ inventory_hostname }}'
+    agent_ip='{{ ansible_host | default(inventory_hostname) }}'
+    changed=0
+
+    find_agent_id() {
+      /var/ossec/bin/manage_agents -l | awk -v name="$agent_name" '
+        $0 ~ ("Name: " name ", IP:") {
+          if (match($0, /ID: ([0-9]+)/, parts)) {
+            print parts[1]
+            exit
+          }
+        }
+      '
+    }
+
+    find_stale_ids() {
+      /var/ossec/bin/manage_agents -l | awk -v name="$agent_name" -v ip="$agent_ip" '
+        $0 ~ ("IP: " ip "$") && $0 !~ ("Name: " name ", IP:") {
+          if (match($0, /ID: ([0-9]+)/, parts)) {
+            print parts[1]
+          }
+        }
+      '
+    }
+
+    agent_id="$(find_agent_id || true)"
+
+    if [ -z "$agent_id" ]; then
+      stale_ids="$(find_stale_ids || true)"
+
+      if [ -n "$stale_ids" ]; then
+        while IFS= read -r stale_id; do
+          [ -n "$stale_id" ] || continue
+          /var/ossec/bin/manage_agents -r "$stale_id" >/dev/null
+        done <<< "$stale_ids"
+        changed=1
+      fi
+
+      /var/ossec/bin/manage_agents -a "$agent_ip" -n "$agent_name" >/dev/null
+      changed=1
+      agent_id="$(find_agent_id)"
+    fi
+
+    if [ "$changed" -eq 1 ]; then
+      echo "changed" >&2
+    fi
+
+    /var/ossec/bin/manage_agents -e "$agent_id"
+  args:
+    executable: /bin/bash
   delegate_to: "{{ groups['wazuh'][0] }}"
   become: true
   register: wazuh_agent_key_line
-  changed_when: false
+  changed_when: "'changed' in wazuh_agent_key_line.stderr"
 
 - name: Fail if the manager does not have an enrolled key for the agent
   ansible.builtin.assert:
@@ -52,13 +103,37 @@
       - wazuh_agent_key_line.stdout | length > 0
     fail_msg: "No enrolled agent key was found on the manager for {{ inventory_hostname }}"
 
-- name: Install the enrolled agent key locally
-  ansible.builtin.copy:
-    dest: /var/ossec/etc/client.keys
-    owner: root
-    group: wazuh
-    mode: "0640"
-    content: "{{ wazuh_agent_key_line.stdout }}\n"
+- name: Extract encoded agent key from manager response
+  ansible.builtin.set_fact:
+    wazuh_agent_import_key: "{{ wazuh_agent_key_line.stdout | regex_search('(?m)^[A-Za-z0-9+/=]+$') | default('') }}"
+
+- name: Fail if the manager output does not contain an encoded agent key
+  ansible.builtin.assert:
+    that:
+      - wazuh_agent_import_key | length > 0
+    fail_msg: "Unable to extract encoded agent key for {{ inventory_hostname }} from manage_agents output"
+
+- name: Import the enrolled agent key locally
+  ansible.builtin.shell: |
+    set -euo pipefail
+
+    expected_line="$(printf '%s' '{{ wazuh_agent_import_key }}' | base64 -d)"
+    current_line="$(tail -n 1 /var/ossec/etc/client.keys 2>/dev/null || true)"
+    current_lines="$(wc -l < /var/ossec/etc/client.keys 2>/dev/null || echo 0)"
+
+    if [ "${current_line}" = "${expected_line}" ] && [ "${current_lines}" -eq 1 ]; then
+      exit 0
+    fi
+
+    rm -f /var/ossec/etc/client.keys
+    printf 'y\n' | /var/ossec/bin/manage_agents -i '{{ wazuh_agent_import_key }}' >/dev/null
+    chown root:wazuh /var/ossec/etc/client.keys
+    chmod 0640 /var/ossec/etc/client.keys
+    echo "changed"
+  args:
+    executable: /bin/bash
+  register: wazuh_agent_key_import
+  changed_when: "'changed' in wazuh_agent_key_import.stdout"
   notify: Restart Wazuh agent
 
 - name: Ensure local shared configuration directory exists on the agent

@@ -43,7 +43,9 @@
 - name: Ensure the extra Wazuh data disk has an ext4 filesystem
   ansible.builtin.shell: |
     set -euo pipefail
-    if ! blkid -o value -s TYPE "{{ wazuh_extra_disk_device.stdout }}1" >/dev/null 2>&1; then
+    current_fs="$(blkid -o value -s TYPE "{{ wazuh_extra_disk_device.stdout }}1" 2>/dev/null || true)"
+    if [ "${current_fs}" != "ext4" ]; then
+      wipefs -a "{{ wazuh_extra_disk_device.stdout }}1" >/dev/null 2>&1 || true
       mkfs.ext4 -F -L "{{ wazuh_vd_updater_fs_label }}" "{{ wazuh_extra_disk_device.stdout }}1"
     fi
   args:
@@ -59,7 +61,7 @@
 
 - name: Ensure vulnerability feed cache mount point exists
   ansible.builtin.file:
-    path: "{{ wazuh_vd_updater_mount_path }}"
+    path: "{{ wazuh_data_mount_path }}"
     state: directory
     owner: root
     group: root
@@ -69,20 +71,114 @@
 - name: Persist vulnerability feed cache mount in fstab
   ansible.builtin.lineinfile:
     path: /etc/fstab
-    regexp: "^UUID={{ wazuh_extra_disk_uuid.stdout | regex_escape() }}\\s+{{ wazuh_vd_updater_mount_path | regex_escape() }}\\s+ext4\\s+defaults\\s+0\\s+2$"
-    line: "UUID={{ wazuh_extra_disk_uuid.stdout }} {{ wazuh_vd_updater_mount_path }} ext4 defaults 0 2"
+    regexp: "^UUID={{ wazuh_extra_disk_uuid.stdout | regex_escape() }}\\s+{{ wazuh_data_mount_path | regex_escape() }}\\s+ext4\\s+defaults\\s+0\\s+2$"
+    line: "UUID={{ wazuh_extra_disk_uuid.stdout }} {{ wazuh_data_mount_path }} ext4 defaults 0 2"
     state: present
   when: not wazuh_manager_lightweight_mode
 
 - name: Mount the extra Wazuh data disk for vulnerability feed cache
   ansible.builtin.shell: |
     set -euo pipefail
-    if ! mountpoint -q "{{ wazuh_vd_updater_mount_path }}"; then
-      mount "{{ wazuh_extra_disk_device.stdout }}1" "{{ wazuh_vd_updater_mount_path }}"
+    if ! mountpoint -q "{{ wazuh_data_mount_path }}"; then
+      mount "{{ wazuh_extra_disk_device.stdout }}1" "{{ wazuh_data_mount_path }}"
     fi
   args:
     executable: /bin/bash
   changed_when: false
+  when: not wazuh_manager_lightweight_mode
+
+- name: Ensure external Wazuh data directories exist
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  loop:
+    - "{{ wazuh_vd_updater_mount_path }}"
+    - "{{ wazuh_tmp_path }}"
+    - "{{ wazuh_logs_path }}"
+  when: not wazuh_manager_lightweight_mode
+
+- name: Ensure /var/ossec exists before redirecting heavy paths
+  ansible.builtin.file:
+    path: /var/ossec
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  when: not wazuh_manager_lightweight_mode
+
+- name: Ensure Wazuh bind-mount target directories exist
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  loop:
+    - /var/ossec/queue
+    - /var/ossec/tmp
+    - /var/ossec/logs
+  when: not wazuh_manager_lightweight_mode
+
+- name: Copy existing heavy Wazuh path contents to the external data disk
+  ansible.builtin.shell: |
+    set -euo pipefail
+
+    target_path="{{ item.target }}"
+    source_path="{{ item.source }}"
+
+    mkdir -p "${source_path}"
+    if mountpoint -q "${target_path}"; then
+      exit 0
+    fi
+
+    if [ -d "${target_path}" ]; then
+      cp -a "${target_path}"/. "${source_path}/" 2>/dev/null || true
+    fi
+  args:
+    executable: /bin/bash
+  loop:
+    - target: /var/ossec/queue
+      source: "{{ wazuh_vd_updater_mount_path }}"
+    - target: /var/ossec/tmp
+      source: "{{ wazuh_tmp_path }}"
+    - target: /var/ossec/logs
+      source: "{{ wazuh_logs_path }}"
+  when: not wazuh_manager_lightweight_mode
+
+- name: Persist Wazuh heavy path bind mounts in fstab
+  ansible.builtin.lineinfile:
+    path: /etc/fstab
+    regexp: "^{{ item.source | regex_escape() }}\\s+{{ item.target | regex_escape() }}\\s+none\\s+bind\\s+0\\s+0$"
+    line: "{{ item.source }} {{ item.target }} none bind 0 0"
+    state: present
+  loop:
+    - source: "{{ wazuh_vd_updater_mount_path }}"
+      target: /var/ossec/queue
+    - source: "{{ wazuh_tmp_path }}"
+      target: /var/ossec/tmp
+    - source: "{{ wazuh_logs_path }}"
+      target: /var/ossec/logs
+  when: not wazuh_manager_lightweight_mode
+
+- name: Mount Wazuh heavy paths from the external data disk
+  ansible.builtin.shell: |
+    set -euo pipefail
+    if ! mountpoint -q "{{ item.target }}"; then
+      mount --bind "{{ item.source }}" "{{ item.target }}"
+    fi
+  args:
+    executable: /bin/bash
+  changed_when: false
+  loop:
+    - source: "{{ wazuh_vd_updater_mount_path }}"
+      target: /var/ossec/queue
+    - source: "{{ wazuh_tmp_path }}"
+      target: /var/ossec/tmp
+    - source: "{{ wazuh_logs_path }}"
+      target: /var/ossec/logs
   when: not wazuh_manager_lightweight_mode
 
 - name: Download Wazuh installation assistant
@@ -107,7 +203,7 @@
 
 - name: Install Wazuh indexer node
   ansible.builtin.command:
-    cmd: bash "{{ wazuh_install_dir }}/wazuh-install.sh" -wi wazuh-indexer -i
+    cmd: bash "{{ wazuh_install_dir }}/wazuh-install.sh" -wi wazuh-indexer -i -o
     creates: /etc/wazuh-indexer/opensearch.yml
     chdir: "{{ wazuh_install_dir }}"
   when: not wazuh_manager_lightweight_mode
@@ -128,7 +224,7 @@
 
 - name: Install Wazuh server node
   ansible.builtin.command:
-    cmd: bash "{{ wazuh_install_dir }}/wazuh-install.sh" -ws wazuh-server -i
+    cmd: bash "{{ wazuh_install_dir }}/wazuh-install.sh" -ws wazuh-server -i -o
     creates: /var/ossec/etc/ossec.conf
     chdir: "{{ wazuh_install_dir }}"
 
@@ -136,9 +232,18 @@
   ansible.builtin.command:
     cmd: apt-get clean
 
-- name: Start Wazuh indexer cluster services
-  ansible.builtin.debug:
-    msg: "Skipping `wazuh-install.sh -s`: single-node indexer security is already initialized during the step-by-step install flow."
+- name: Initialize Wazuh indexer security when required
+  ansible.builtin.shell: |
+    set -euo pipefail
+    if curl -sk https://127.0.0.1:9200 | grep -q "OpenSearch Security not initialized."; then
+      bash "{{ wazuh_install_dir }}/wazuh-install.sh" -s
+      echo "changed"
+    fi
+  args:
+    chdir: "{{ wazuh_install_dir }}"
+    executable: /bin/bash
+  register: wazuh_indexer_security_init
+  changed_when: "'changed' in wazuh_indexer_security_init.stdout"
   when: not wazuh_manager_lightweight_mode
 
 - name: Extract generated passwords file
@@ -186,11 +291,20 @@
     state: stopped
   when: not wazuh_manager_lightweight_mode
 
+- name: Ensure Wazuh temporary runtime directory exists on the extra data disk
+  ansible.builtin.file:
+    path: "{{ wazuh_tmp_path }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  when: not wazuh_manager_lightweight_mode
+
 - name: Clean temporary vulnerability feed data before installing dashboard
   ansible.builtin.shell: |
     set -euo pipefail
-    rm -rf /var/ossec/queue/vd_updater/tmp /var/ossec/queue/vd_updater/downloads /var/ossec/queue/vd_updater/contents
-    mkdir -p /var/ossec/queue/vd_updater/tmp
+    rm -rf "{{ wazuh_vd_updater_mount_path }}/vd_updater/tmp" "{{ wazuh_vd_updater_mount_path }}/vd_updater/downloads" "{{ wazuh_vd_updater_mount_path }}/vd_updater/contents"
+    mkdir -p "{{ wazuh_vd_updater_mount_path }}/vd_updater/tmp"
     apt-get clean
     rm -rf /var/cache/apt/archives/* /var/lib/apt/lists/*
   args:
@@ -451,7 +565,8 @@
     validate_certs: false
     status_code: 200
   register: wazuh_dashboard_status
-  until: wazuh_dashboard_status.status == 200
+  failed_when: false
+  until: (wazuh_dashboard_status.status | default(0)) == 200
   retries: 20
   delay: 15
   when: not wazuh_manager_lightweight_mode

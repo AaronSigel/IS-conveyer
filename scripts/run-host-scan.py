@@ -10,6 +10,7 @@ import time
 import urllib.parse
 import urllib.request
 from datetime import datetime, timezone
+from urllib.error import HTTPError
 
 
 PROJECT_ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -96,6 +97,10 @@ def run_command(command):
     return result
 
 
+def command_result(command):
+    return subprocess.run(command, cwd=PROJECT_ROOT, capture_output=True, text=True)
+
+
 def agent_inventory(client, hosts):
     response = client.get("/agents", params={"select": "id,name,status,lastKeepAlive", "limit": 100})
     items = response.get("data", {}).get("affected_items", [])
@@ -146,41 +151,48 @@ def wait_for_scan_data(client, hosts, timeout, interval):
 
 def build_output_paths(prefix):
     if not prefix:
-        return (
-            ARTIFACTS_DIR / "unified-findings.json",
-            ARTIFACTS_DIR / "raw-wazuh-alerts.json",
-            ARTIFACTS_DIR / "raw-wazuh-vulnerabilities.json",
-            ARTIFACTS_DIR / "draft-report.md",
-        )
+        return None
 
     normalized = prefix.strip().strip("-")
     if not normalized:
         raise ValueError("Output prefix must not be empty")
-    return (
-        ARTIFACTS_DIR / f"{normalized}-unified-findings.json",
-        ARTIFACTS_DIR / f"{normalized}-raw-wazuh-alerts.json",
-        ARTIFACTS_DIR / f"{normalized}-raw-wazuh-vulnerabilities.json",
-        ARTIFACTS_DIR / f"{normalized}-draft-report.md",
-    )
+    return normalized
 
 
-def main():
-    parser = argparse.ArgumentParser(description="Trigger host scans and produce vulnerability reports.")
-    parser.add_argument("--hosts", default=",".join(DEFAULT_TARGETS), help="Comma-separated inventory hostnames.")
-    parser.add_argument("--timeout", type=int, default=600, help="Maximum wait time for scan data in seconds.")
-    parser.add_argument("--poll-interval", type=int, default=15, help="Polling interval in seconds.")
-    parser.add_argument("--output-prefix", default="", help="Optional prefix for generated artifacts.")
-    args = parser.parse_args()
-
-    hosts = parse_hosts(args.hosts)
+def load_required_credentials():
     creds = load_env_file(CREDS_PATH)
     required = ("WAZUH_API_URL", "WAZUH_API_USER", "WAZUH_API_PASSWORD")
     missing = [key for key in required if not creds.get(key)]
     if missing:
         raise RuntimeError(f"Missing Wazuh API credentials: {', '.join(missing)}")
+    return creds
+
+
+def build_api_client(creds):
+    return WazuhApiClient(
+        creds["WAZUH_API_URL"],
+        creds["WAZUH_API_USER"],
+        creds["WAZUH_API_PASSWORD"],
+    )
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Trigger Wazuh host scans and wait for fresh data.")
+    parser.add_argument("--hosts", default=",".join(DEFAULT_TARGETS), help="Comma-separated inventory hostnames.")
+    parser.add_argument("--timeout", type=int, default=600, help="Maximum wait time for scan data in seconds.")
+    parser.add_argument("--poll-interval", type=int, default=15, help="Polling interval in seconds.")
+    parser.add_argument(
+        "--output-prefix",
+        default="",
+        help="Optional logical scan label printed on completion. Artifacts are not created by this script.",
+    )
+    args = parser.parse_args()
+
+    hosts = parse_hosts(args.hosts)
 
     print(f"scan started at {iso_now()}")
     print(f"hosts: {', '.join(hosts)}")
+    creds = load_required_credentials()
 
     limit = ":".join(hosts)
     run_command(
@@ -197,44 +209,19 @@ def main():
         ]
     )
 
-    client = WazuhApiClient(
-        creds["WAZUH_API_URL"],
-        creds["WAZUH_API_USER"],
-        creds["WAZUH_API_PASSWORD"],
-    )
+    try:
+        client = build_api_client(creds)
+    except HTTPError as exc:
+        if exc.code != 401:
+            raise
+        creds = load_required_credentials()
+        client = build_api_client(creds)
     wait_for_scan_data(client, hosts, args.timeout, args.poll_interval)
 
-    unified_path, raw_alerts_path, raw_vulns_path, report_path = build_output_paths(args.output_prefix)
-
-    run_command(
-        [
-            "python3",
-            "scripts/export-findings.py",
-            "--hosts",
-            ",".join(hosts),
-            "--output",
-            str(unified_path),
-            "--raw-alerts-output",
-            str(raw_alerts_path),
-            "--raw-vulns-output",
-            str(raw_vulns_path),
-        ]
-    )
-    run_command(
-        [
-            "python3",
-            "scripts/generate-report.py",
-            "--input",
-            str(unified_path),
-            "--output",
-            str(report_path),
-        ]
-    )
-
-    print(f"unified findings: {unified_path}")
-    print(f"raw alerts: {raw_alerts_path}")
-    print(f"raw vulnerabilities: {raw_vulns_path}")
-    print(f"report: {report_path}")
+    scan_label = build_output_paths(args.output_prefix)
+    if scan_label:
+        print(f"scan label: {scan_label}")
+    print("scan data is ready for export")
 
 
 if __name__ == "__main__":

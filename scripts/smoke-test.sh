@@ -7,6 +7,21 @@ INVENTORY="${PROJECT_ROOT}/ansible/inventory/hosts.ini"
 
 cd "${PROJECT_ROOT}"
 
+read_vagrant_ssh_value() {
+  local machine="$1"
+  local key="$2"
+
+  vagrant ssh-config "${machine}" | awk -v lookup_key="${key}" '
+    $1 == lookup_key {
+      $1 = ""
+      sub(/^[[:space:]]+/, "", $0)
+      gsub(/"/, "", $0)
+      print $0
+      exit
+    }
+  '
+}
+
 vagrant status
 vagrant ssh wazuh -c "echo wazuh-ok"
 vagrant ssh target1 -c "echo target1-ok"
@@ -16,15 +31,19 @@ ansible all -i "${INVENTORY}" -m ping
 INDEXER_PASS_FILE="${PROJECT_ROOT}/artifacts/wazuh-indexer-password.txt"
 if [[ -f "${INDEXER_PASS_FILE}" ]]; then
   INDEXER_PASS="$(tr -d '\n' < "${INDEXER_PASS_FILE}")"
+  SSH_HOST="$(read_vagrant_ssh_value wazuh HostName)"
+  SSH_PORT="$(read_vagrant_ssh_value wazuh Port)"
+  SSH_USER="$(read_vagrant_ssh_value wazuh User)"
+  SSH_KEY="$(read_vagrant_ssh_value wazuh IdentityFile)"
+
   for attempt in $(seq 1 20); do
     count="$(
       ssh -F /dev/null \
         -o UserKnownHostsFile=/dev/null \
         -o StrictHostKeyChecking=no \
-        -i /home/funder/.vagrant.d/insecure_private_keys/vagrant.key.ed25519 \
-        -i /home/funder/.vagrant.d/insecure_private_keys/vagrant.key.rsa \
-        -p 2222 \
-        vagrant@127.0.0.1 \
+        -i "${SSH_KEY}" \
+        -p "${SSH_PORT}" \
+        "${SSH_USER}@${SSH_HOST}" \
         "sudo curl -sk -u admin:${INDEXER_PASS} https://127.0.0.1:9200/wazuh-states-vulnerabilities*/_count" \
         2>/dev/null | python3 -c 'import json,sys; print(json.load(sys.stdin).get("count", 0))'
     )"
@@ -41,6 +60,3 @@ if [[ -f "${INDEXER_PASS_FILE}" ]]; then
     sleep 15
   done
 fi
-
-python3 scripts/export-findings.py
-python3 scripts/generate-report.py

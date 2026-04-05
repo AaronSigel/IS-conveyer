@@ -6,3 +6,4 @@ PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
 cd "${PROJECT_ROOT}"
 vagrant destroy -f "$@"
+rm -rf "${PROJECT_ROOT}/.vagrant/disks"
