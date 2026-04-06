@@ -127,6 +127,7 @@ __COMMAND__
     $linuxScript = $linuxScript.Replace("__VIRTUALBOX_EXE_WSL_PATH__", (Quote-ForBash -Value $virtualBoxExeWslPath))
     $linuxScript = $linuxScript.Replace("__REPO_WSL_PATH__", (Quote-ForBash -Value $repoWslPath))
     $linuxScript = $linuxScript.Replace("__COMMAND__", $Command)
+    $linuxScript = $linuxScript.Replace("`r`n", "`n").Replace("`r", "`n")
 
     Write-Host "[windows-wrapper] WSL distro: $resolvedDistro"
     Write-Host "[windows-wrapper] Repo path: $repoWslPath"
