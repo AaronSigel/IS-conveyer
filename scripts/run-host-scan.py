@@ -2,6 +2,7 @@
 import argparse
 import base64
 import json
+import os
 import pathlib
 import ssl
 import subprocess
@@ -89,12 +90,41 @@ class WazuhApiClient:
 
 
 def run_command(command):
-    result = subprocess.run(command, cwd=PROJECT_ROOT, capture_output=True, text=True)
-    if result.returncode != 0:
-        raise RuntimeError(
-            f"Command failed ({result.returncode}): {' '.join(command)}\n{result.stdout}\n{result.stderr}".strip()
-        )
-    return result
+    inventory_path = build_runtime_inventory()
+    env = {
+        **dict(os.environ),
+        "ANSIBLE_CONFIG": str(PROJECT_ROOT / "ansible.cfg"),
+        "ANSIBLE_ROLES_PATH": str(PROJECT_ROOT / "ansible" / "roles"),
+    }
+    patched_command = [
+        str(inventory_path) if part == str(INVENTORY_PATH) else part
+        for part in command
+    ]
+    try:
+        result = subprocess.run(patched_command, cwd=PROJECT_ROOT, capture_output=True, text=True, env=env)
+        if result.returncode != 0:
+            raise RuntimeError(
+                f"Command failed ({result.returncode}): {' '.join(patched_command)}\n{result.stdout}\n{result.stderr}".strip()
+            )
+        return result
+    finally:
+        if inventory_path != INVENTORY_PATH and inventory_path.exists():
+            inventory_path.unlink()
+
+
+def build_runtime_inventory():
+    windows_host_ip = os.environ.get("WINDOWS_HOST_IP", "127.0.0.1").strip() or "127.0.0.1"
+    if windows_host_ip == "127.0.0.1":
+        return INVENTORY_PATH
+
+    inventory_text = INVENTORY_PATH.read_text(encoding="utf-8").replace(
+        "ansible_host=127.0.0.1",
+        f"ansible_host={windows_host_ip}",
+    )
+    inventory_text += f"\nansible_ssh_private_key_file={os.environ.get('VAGRANT_INSECURE_PRIVATE_KEY', '')}\n"
+    runtime_inventory = ARTIFACTS_DIR / "runtime-hosts.ini"
+    runtime_inventory.write_text(inventory_text, encoding="utf-8")
+    return runtime_inventory
 
 
 def command_result(command):

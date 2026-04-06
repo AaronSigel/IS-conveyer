@@ -9,24 +9,40 @@ Vagrant.configure("2") do |config|
       ip: "192.168.56.10",
       memory: 10240,
       cpus: 4,
-      extra_disk_mb: 20480
+      extra_disk_mb: 20480,
+      ssh_port: 2222,
+      forwarded_ports: [
+        { guest: 443, host: 8443 },
+        { guest: 55000, host: 55000 },
+        { guest: 9200, host: 9200 }
+      ]
     },
     "target1" => {
       ip: "192.168.56.11",
       memory: 2048,
-      cpus: 2
+      cpus: 2,
+      ssh_port: 2201
     },
     "target2" => {
       ip: "192.168.56.12",
       memory: 2048,
-      cpus: 2
+      cpus: 2,
+      ssh_port: 2202
     }
   }
 
   machines.each do |name, settings|
     config.vm.define name do |machine|
       machine.vm.hostname = name
-      machine.vm.network "private_network", ip: settings[:ip]
+      machine.vm.network "private_network", ip: settings[:ip], virtualbox__intnet: "ib-host-audit-poc"
+      machine.vm.network "forwarded_port", guest: 22, host: settings[:ssh_port], id: "ssh", auto_correct: false
+
+      Array(settings[:forwarded_ports]).each do |port|
+        machine.vm.network "forwarded_port",
+          guest: port[:guest],
+          host: port[:host],
+          auto_correct: false
+      end
 
       machine.vm.provider "virtualbox" do |vb|
         vb.name = "ib-host-audit-poc-#{name}"

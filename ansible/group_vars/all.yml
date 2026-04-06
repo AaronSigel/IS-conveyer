@@ -1,8 +1,9 @@
 project_name: ib-host-audit-poc
 profile_name: host-baseline-v1
 wazuh_manager_ip: 192.168.56.10
+wazuh_host_access_ip: "{{ lookup('env', 'WINDOWS_HOST_IP') | default('127.0.0.1', true) }}"
 wazuh_manager_hostname: wazuh
-wazuh_api_url: "https://{{ wazuh_manager_ip }}:55000"
+wazuh_api_url: "https://{{ wazuh_host_access_ip }}:55000"
 wazuh_version_major: "4.14"
 wazuh_install_script_url: "https://packages.wazuh.com/{{ wazuh_version_major }}/wazuh-install.sh"
 wazuh_packages_repo_apt: "deb [signed-by=/usr/share/keyrings/wazuh.gpg] https://packages.wazuh.com/4.x/apt/ stable main"
@@ -18,7 +19,7 @@ wazuh_vd_updater_fs_label: wazuh-vd-updater
 wazuh_artifacts_dir: "{{ playbook_dir }}/../../artifacts"
 wazuh_api_user: wazuh
 wazuh_api_password_file: "{{ wazuh_artifacts_dir }}/wazuh-api-password.txt"
-wazuh_indexer_url: "https://{{ wazuh_manager_ip }}:9200"
+wazuh_indexer_url: "https://{{ wazuh_host_access_ip }}:9200"
 wazuh_indexer_user: admin
 wazuh_indexer_password_file: "{{ wazuh_artifacts_dir }}/wazuh-indexer-password.txt"
 wazuh_credentials_env_file: "{{ wazuh_artifacts_dir }}/wazuh-credentials.env"
