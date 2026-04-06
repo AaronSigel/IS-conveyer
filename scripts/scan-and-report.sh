@@ -45,4 +45,4 @@ done
 cd "${PROJECT_ROOT}"
 
 ./scripts/run-host-scan.py "${EXTRA_SCAN_ARGS[@]}"
-./scripts/collect-report.sh --hosts "${HOSTS}" ${OUTPUT_PREFIX:+--output-prefix "${OUTPUT_PREFIX}"}
+bash ./scripts/collect-report.sh --hosts "${HOSTS}" ${OUTPUT_PREFIX:+--output-prefix "${OUTPUT_PREFIX}"}

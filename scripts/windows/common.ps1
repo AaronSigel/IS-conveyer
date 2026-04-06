@@ -157,7 +157,8 @@ function Invoke-WslScript {
     )
 
     $parts = New-Object System.Collections.Generic.List[string]
-    $parts.Add($ScriptPath)
+    $parts.Add("bash")
+    $parts.Add((Quote-ForBash -Value $ScriptPath))
 
     foreach ($arg in $Arguments) {
         $parts.Add((Quote-ForBash -Value $arg))

@@ -43,17 +43,17 @@ done
 cd "${PROJECT_ROOT}"
 
 echo "[1/4] Starting virtual machines"
-./scripts/up.sh
+bash ./scripts/up.sh
 
 echo "[2/4] Provisioning hosts and Wazuh components"
-./scripts/provision.sh
+bash ./scripts/provision.sh
 
 if (( RUN_SMOKE_TEST )); then
   echo "[3/4] Running smoke test"
-  ./scripts/smoke-test.sh
+  bash ./scripts/smoke-test.sh
 else
   echo "[3/4] Smoke test skipped"
 fi
 
 echo "[4/4] Running scan and generating report"
-./scripts/scan-and-report.sh "${SCAN_ARGS[@]}"
+bash ./scripts/scan-and-report.sh "${SCAN_ARGS[@]}"
