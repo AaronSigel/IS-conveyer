@@ -43,7 +43,7 @@
     set -euo pipefail
 
     agent_name='{{ inventory_hostname }}'
-    agent_ip='{{ ansible_host | default(inventory_hostname) }}'
+    agent_ip='{{ hostvars[inventory_hostname].vm_private_ip | default(ansible_host | default(inventory_hostname)) }}'
     changed=0
 
     find_agent_id() {

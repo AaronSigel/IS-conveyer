@@ -285,6 +285,24 @@
     fail_msg: "Unable to parse one or more Wazuh dashboard/indexer passwords from wazuh-passwords.txt"
   when: not wazuh_manager_lightweight_mode
 
+- name: Verify parsed indexer admin credentials against the local indexer
+  ansible.builtin.shell: |
+    set -euo pipefail
+    curl -sk -o /dev/null -w '%{http_code}' -u "admin:{{ wazuh_dashboard_password_value }}" https://127.0.0.1:9200
+  args:
+    executable: /bin/bash
+  register: wazuh_indexer_admin_auth_check
+  changed_when: false
+  when: not wazuh_manager_lightweight_mode
+
+- name: Fall back to demo indexer credentials when generated passwords are not active
+  ansible.builtin.set_fact:
+    wazuh_dashboard_password_value: "admin"
+    wazuh_indexer_dashboard_password_value: "kibanaserver"
+  when:
+    - not wazuh_manager_lightweight_mode
+    - wazuh_indexer_admin_auth_check.stdout != "200"
+
 - name: Stop Wazuh manager temporarily before dashboard install
   ansible.builtin.systemd:
     name: wazuh-manager

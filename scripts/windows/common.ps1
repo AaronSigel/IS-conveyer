@@ -40,11 +40,19 @@ function Convert-WindowsPathToWsl {
 }
 
 function Get-VagrantKeyWindowsPath {
-    $candidate = Join-Path $HOME ".vagrant.d\insecure_private_key"
-    if (-not (Test-Path $candidate)) {
-        throw "Vagrant insecure private key was not found at '$candidate'."
+    $candidates = @(
+        (Join-Path $HOME ".vagrant.d\insecure_private_keys\vagrant.key.rsa"),
+        (Join-Path $HOME ".vagrant.d\insecure_private_keys\vagrant.key.ed25519"),
+        (Join-Path $HOME ".vagrant.d\insecure_private_key")
+    )
+
+    foreach ($candidate in $candidates) {
+        if (Test-Path $candidate) {
+            return (Resolve-Path $candidate).Path
+        }
     }
-    return (Resolve-Path $candidate).Path
+
+    throw "Vagrant insecure private key was not found in '$HOME\.vagrant.d'."
 }
 
 function Quote-ForBash {
@@ -63,11 +71,115 @@ function Get-WindowsCommandPath {
     )
 
     $command = Get-Command $CommandName -ErrorAction SilentlyContinue
-    if (-not $command) {
-        throw "'$CommandName' is not available on Windows PATH."
+    if ($command) {
+        return $command.Source
     }
 
-    return $command.Source
+    if ($CommandName -ieq "VBoxManage.exe" -or $CommandName -ieq "VBoxManage") {
+        $registryKeys = @(
+            "HKLM:\SOFTWARE\Oracle\VirtualBox",
+            "HKLM:\SOFTWARE\WOW6432Node\Oracle\VirtualBox"
+        )
+
+        foreach ($key in $registryKeys) {
+            $installDir = (Get-ItemProperty $key -ErrorAction SilentlyContinue).InstallDir
+            if (-not $installDir) {
+                continue
+            }
+
+            $candidate = Join-Path $installDir "VBoxManage.exe"
+            if (Test-Path $candidate) {
+                return (Resolve-Path $candidate).Path
+            }
+        }
+
+        $fallbackPaths = @(
+            "C:\Program Files\Oracle\VirtualBox\VBoxManage.exe",
+            "C:\Program Files\VirtualBox\VBoxManage.exe"
+        )
+
+        foreach ($candidate in $fallbackPaths) {
+            if (Test-Path $candidate) {
+                return (Resolve-Path $candidate).Path
+            }
+        }
+    }
+
+    throw "'$CommandName' is not available on Windows PATH."
+}
+
+function Ensure-VirtualBoxHostOnlyAdapter {
+    param(
+        [string]$IpAddress = "192.168.56.1",
+        [string]$NetworkMask = "255.255.255.0"
+    )
+
+    $vboxManage = Get-WindowsCommandPath -CommandName "VBoxManage.exe"
+    $hostOnlyInfo = & $vboxManage list hostonlyifs
+    if ($LASTEXITCODE -ne 0) {
+        throw "Failed to list VirtualBox host-only interfaces."
+    }
+
+    $interfaceNames = @(
+        $hostOnlyInfo |
+            Select-String '^Name:\s+(.+)$' |
+            ForEach-Object { $_.Matches[0].Groups[1].Value.Trim() }
+    )
+
+    if (-not $interfaceNames) {
+        Write-Host "[windows-wrapper] Creating VirtualBox host-only adapter"
+        & $vboxManage hostonlyif create | Out-Null
+        if ($LASTEXITCODE -ne 0) {
+            throw "Failed to create VirtualBox host-only interface."
+        }
+
+        $hostOnlyInfo = & $vboxManage list hostonlyifs
+        if ($LASTEXITCODE -ne 0) {
+            throw "Failed to list VirtualBox host-only interfaces after creation."
+        }
+
+        $interfaceNames = @(
+            $hostOnlyInfo |
+                Select-String '^Name:\s+(.+)$' |
+                ForEach-Object { $_.Matches[0].Groups[1].Value.Trim() }
+        )
+    }
+
+    $interfaceName = $interfaceNames | Where-Object { $_ -eq "VirtualBox Host-Only Ethernet Adapter" } | Select-Object -First 1
+    if (-not $interfaceName) {
+        $interfaceName = $interfaceNames | Select-Object -First 1
+    }
+
+    if (-not $interfaceName) {
+        throw "VirtualBox host-only interface could not be resolved."
+    }
+
+    Write-Host "[windows-wrapper] Using host-only adapter: $interfaceName"
+    & $vboxManage hostonlyif ipconfig $interfaceName --ip $IpAddress --netmask $NetworkMask | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+        throw "Failed to configure VirtualBox host-only interface '$interfaceName'."
+    }
+
+    return $interfaceName
+}
+
+function Invoke-WindowsVagrant {
+    param(
+        [string[]]$Arguments = @(),
+        [string]$RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
+    )
+
+    $vagrantExe = Get-WindowsCommandPath -CommandName "vagrant.exe"
+    Push-Location $RepoRoot
+    try {
+        & $vagrantExe @Arguments
+        if ($LASTEXITCODE -ne 0) {
+            throw "Vagrant command failed with exit code $LASTEXITCODE."
+        }
+    }
+    finally {
+        Pop-Location
+    }
 }
 
 function Invoke-InWslRepo {
@@ -94,26 +206,30 @@ function Invoke-InWslRepo {
 set -euo pipefail
 
 export VAGRANT_WSL_ENABLE_WINDOWS_ACCESS=1
-export VAGRANT_INSECURE_PRIVATE_KEY=__KEY_WSL_PATH__
+export WINDOWS_HOST_IP="$(ip route show default | awk '/default/ { print $3; exit }')"
 
 WRAPPER_DIR=__WRAPPER_DIR__
-VAGRANT_BIN_DIR=__VAGRANT_BIN_DIR__
 VIRTUALBOX_BIN_DIR=__VIRTUALBOX_BIN_DIR__
+WINDOWS_KEY_PATH=__KEY_WSL_PATH__
+WSL_VAGRANT_KEY=/tmp/is-conveyer-vagrant.key
 mkdir -p "$WRAPPER_DIR"
+cp "$WINDOWS_KEY_PATH" "$WSL_VAGRANT_KEY"
+chmod 600 "$WSL_VAGRANT_KEY"
+export VAGRANT_INSECURE_PRIVATE_KEY="$WSL_VAGRANT_KEY"
 
 cat > "$WRAPPER_DIR/vagrant" <<'EOF'
 #!/usr/bin/env bash
-exec __VAGRANT_EXE_WSL_PATH__ "$@"
+PATH="$PATH:/mnt/c/Windows/System32" exec cmd.exe /c vagrant.exe "$@"
 EOF
 chmod +x "$WRAPPER_DIR/vagrant"
 
 cat > "$WRAPPER_DIR/VBoxManage" <<'EOF'
 #!/usr/bin/env bash
-exec __VIRTUALBOX_EXE_WSL_PATH__ "$@"
+PATH="$PATH:/mnt/c/Windows/System32" exec cmd.exe /c VBoxManage.exe "$@"
 EOF
 chmod +x "$WRAPPER_DIR/VBoxManage"
 
-export PATH="$WRAPPER_DIR:$PATH:$VAGRANT_BIN_DIR:$VIRTUALBOX_BIN_DIR"
+export PATH="$WRAPPER_DIR:$PATH:$VIRTUALBOX_BIN_DIR"
 cd __REPO_WSL_PATH__
 __COMMAND__
 '@
@@ -121,10 +237,7 @@ __COMMAND__
     $linuxScript = $linuxScriptTemplate
     $linuxScript = $linuxScript.Replace("__KEY_WSL_PATH__", (Quote-ForBash -Value $keyWslPath))
     $linuxScript = $linuxScript.Replace("__WRAPPER_DIR__", (Quote-ForBash -Value $wrapperDir))
-    $linuxScript = $linuxScript.Replace("__VAGRANT_BIN_DIR__", (Quote-ForBash -Value $vagrantBinDir))
     $linuxScript = $linuxScript.Replace("__VIRTUALBOX_BIN_DIR__", (Quote-ForBash -Value $virtualBoxBinDir))
-    $linuxScript = $linuxScript.Replace("__VAGRANT_EXE_WSL_PATH__", (Quote-ForBash -Value $vagrantExeWslPath))
-    $linuxScript = $linuxScript.Replace("__VIRTUALBOX_EXE_WSL_PATH__", (Quote-ForBash -Value $virtualBoxExeWslPath))
     $linuxScript = $linuxScript.Replace("__REPO_WSL_PATH__", (Quote-ForBash -Value $repoWslPath))
     $linuxScript = $linuxScript.Replace("__COMMAND__", $Command)
     $linuxScript = $linuxScript.Replace("`r`n", "`n").Replace("`r", "`n")

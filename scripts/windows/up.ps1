@@ -9,4 +9,13 @@ $ErrorActionPreference = "Stop"
 
 . (Join-Path $PSScriptRoot "common.ps1")
 
-Invoke-WslScript -Distro $Distro -ScriptPath "./scripts/up.sh" -Arguments $ScriptArgs
+Ensure-VirtualBoxHostOnlyAdapter | Out-Null
+
+if ($ScriptArgs.Count -gt 0) {
+    Invoke-WindowsVagrant -Arguments (@("up") + $ScriptArgs)
+}
+else {
+    foreach ($machine in @("wazuh", "target1", "target2")) {
+        Invoke-WindowsVagrant -Arguments @("up", $machine)
+    }
+}
