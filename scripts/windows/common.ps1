@@ -81,34 +81,44 @@ function Invoke-InWslRepo {
     $scriptFile = [System.IO.Path]::Combine([System.IO.Path]::GetTempPath(), ("is-conveyer-" + [System.Guid]::NewGuid().ToString("N") + ".sh"))
     $scriptFileWslPath = Convert-WindowsPathToWsl -Path $scriptFile
 
-    $linuxScript = @"
+    $linuxScriptTemplate = @'
 #!/usr/bin/env bash
 set -euo pipefail
 
 export VAGRANT_WSL_ENABLE_WINDOWS_ACCESS=1
-export VAGRANT_INSECURE_PRIVATE_KEY=$(Quote-ForBash -Value $keyWslPath)
+export VAGRANT_INSECURE_PRIVATE_KEY=__KEY_WSL_PATH__
 
-WRAPPER_DIR=$(Quote-ForBash -Value $wrapperDir)
-VAGRANT_BIN_DIR=$(Quote-ForBash -Value $vagrantBinDir)
-VIRTUALBOX_BIN_DIR=$(Quote-ForBash -Value $virtualBoxBinDir)
+WRAPPER_DIR=__WRAPPER_DIR__
+VAGRANT_BIN_DIR=__VAGRANT_BIN_DIR__
+VIRTUALBOX_BIN_DIR=__VIRTUALBOX_BIN_DIR__
 mkdir -p "$WRAPPER_DIR"
 
 cat > "$WRAPPER_DIR/vagrant" <<'EOF'
 #!/usr/bin/env bash
-exec $(Quote-ForBash -Value $vagrantExeWslPath) "$@"
+exec __VAGRANT_EXE_WSL_PATH__ "$@"
 EOF
 chmod +x "$WRAPPER_DIR/vagrant"
 
 cat > "$WRAPPER_DIR/VBoxManage" <<'EOF'
 #!/usr/bin/env bash
-exec $(Quote-ForBash -Value $virtualBoxExeWslPath) "$@"
+exec __VIRTUALBOX_EXE_WSL_PATH__ "$@"
 EOF
 chmod +x "$WRAPPER_DIR/VBoxManage"
 
 export PATH="$WRAPPER_DIR:$PATH:$VAGRANT_BIN_DIR:$VIRTUALBOX_BIN_DIR"
-cd $(Quote-ForBash -Value $repoWslPath)
-$Command
-"@
+cd __REPO_WSL_PATH__
+__COMMAND__
+'@
+
+    $linuxScript = $linuxScriptTemplate `
+        .Replace("__KEY_WSL_PATH__", (Quote-ForBash -Value $keyWslPath)) `
+        .Replace("__WRAPPER_DIR__", (Quote-ForBash -Value $wrapperDir)) `
+        .Replace("__VAGRANT_BIN_DIR__", (Quote-ForBash -Value $vagrantBinDir)) `
+        .Replace("__VIRTUALBOX_BIN_DIR__", (Quote-ForBash -Value $virtualBoxBinDir)) `
+        .Replace("__VAGRANT_EXE_WSL_PATH__", (Quote-ForBash -Value $vagrantExeWslPath)) `
+        .Replace("__VIRTUALBOX_EXE_WSL_PATH__", (Quote-ForBash -Value $virtualBoxExeWslPath)) `
+        .Replace("__REPO_WSL_PATH__", (Quote-ForBash -Value $repoWslPath)) `
+        .Replace("__COMMAND__", $Command)
 
     Write-Host "[windows-wrapper] WSL distro: $resolvedDistro"
     Write-Host "[windows-wrapper] Repo path: $repoWslPath"
