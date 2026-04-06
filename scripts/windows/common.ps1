@@ -78,36 +78,53 @@ function Invoke-InWslRepo {
     $vagrantBinDir = Split-Path $vagrantExeWslPath -Parent
     $virtualBoxBinDir = Split-Path $virtualBoxExeWslPath -Parent
     $wrapperDir = "/tmp/is-conveyer-windows-bin"
-    $wrapperDirQuoted = Quote-ForBash -Value $wrapperDir
-    $vagrantWrapperPathQuoted = Quote-ForBash -Value "$wrapperDir/vagrant"
-    $virtualBoxWrapperPathQuoted = Quote-ForBash -Value "$wrapperDir/VBoxManage"
-    $shebangQuoted = Quote-ForBash -Value "#!/usr/bin/env bash"
-    $vagrantExecLineQuoted = Quote-ForBash -Value ('exec "' + $vagrantExeWslPath + '" "$@"')
-    $virtualBoxExecLineQuoted = Quote-ForBash -Value ('exec "' + $virtualBoxExeWslPath + '" "$@"')
-    $repoWslPathQuoted = Quote-ForBash -Value $repoWslPath
-    $keyWslPathQuoted = Quote-ForBash -Value $keyWslPath
+    $scriptFile = [System.IO.Path]::Combine([System.IO.Path]::GetTempPath(), ("is-conveyer-" + [System.Guid]::NewGuid().ToString("N") + ".sh"))
+    $scriptFileWslPath = Convert-WindowsPathToWsl -Path $scriptFile
 
-    $linuxCommand = @(
-        "set -euo pipefail"
-        "export VAGRANT_WSL_ENABLE_WINDOWS_ACCESS=1"
-        ("export VAGRANT_INSECURE_PRIVATE_KEY=" + $keyWslPathQuoted)
-        ("mkdir -p " + $wrapperDirQuoted)
-        ("printf '%s\n' " + $shebangQuoted + " " + $vagrantExecLineQuoted + " > " + $vagrantWrapperPathQuoted)
-        ("chmod +x " + $vagrantWrapperPathQuoted)
-        ("printf '%s\n' " + $shebangQuoted + " " + $virtualBoxExecLineQuoted + " > " + $virtualBoxWrapperPathQuoted)
-        ("chmod +x " + $virtualBoxWrapperPathQuoted)
-        ('export PATH="' + $wrapperDir + ':$PATH:' + $vagrantBinDir + ':' + $virtualBoxBinDir + '"')
-        ("cd " + $repoWslPathQuoted)
-        $Command
-    ) -join "; "
+    $linuxScript = @"
+#!/usr/bin/env bash
+set -euo pipefail
+
+export VAGRANT_WSL_ENABLE_WINDOWS_ACCESS=1
+export VAGRANT_INSECURE_PRIVATE_KEY=$(Quote-ForBash -Value $keyWslPath)
+
+WRAPPER_DIR=$(Quote-ForBash -Value $wrapperDir)
+VAGRANT_BIN_DIR=$(Quote-ForBash -Value $vagrantBinDir)
+VIRTUALBOX_BIN_DIR=$(Quote-ForBash -Value $virtualBoxBinDir)
+mkdir -p "$WRAPPER_DIR"
+
+cat > "$WRAPPER_DIR/vagrant" <<'EOF'
+#!/usr/bin/env bash
+exec $(Quote-ForBash -Value $vagrantExeWslPath) "$@"
+EOF
+chmod +x "$WRAPPER_DIR/vagrant"
+
+cat > "$WRAPPER_DIR/VBoxManage" <<'EOF'
+#!/usr/bin/env bash
+exec $(Quote-ForBash -Value $virtualBoxExeWslPath) "$@"
+EOF
+chmod +x "$WRAPPER_DIR/VBoxManage"
+
+export PATH="$WRAPPER_DIR:$PATH:$VAGRANT_BIN_DIR:$VIRTUALBOX_BIN_DIR"
+cd $(Quote-ForBash -Value $repoWslPath)
+$Command
+"@
 
     Write-Host "[windows-wrapper] WSL distro: $resolvedDistro"
     Write-Host "[windows-wrapper] Repo path: $repoWslPath"
     Write-Host "[windows-wrapper] Command: $Command"
 
-    & wsl.exe -d $resolvedDistro -- bash -lc $linuxCommand
-    if ($LASTEXITCODE -ne 0) {
-        throw "WSL command failed with exit code $LASTEXITCODE."
+    try {
+        [System.IO.File]::WriteAllText($scriptFile, $linuxScript, [System.Text.UTF8Encoding]::new($false))
+        & wsl.exe -d $resolvedDistro -- bash $scriptFileWslPath
+        if ($LASTEXITCODE -ne 0) {
+            throw "WSL command failed with exit code $LASTEXITCODE."
+        }
+    }
+    finally {
+        if (Test-Path $scriptFile) {
+            Remove-Item $scriptFile -Force -ErrorAction SilentlyContinue
+        }
     }
 }
 
