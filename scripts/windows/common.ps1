@@ -110,15 +110,15 @@ cd __REPO_WSL_PATH__
 __COMMAND__
 '@
 
-    $linuxScript = $linuxScriptTemplate `
-        .Replace("__KEY_WSL_PATH__", (Quote-ForBash -Value $keyWslPath)) `
-        .Replace("__WRAPPER_DIR__", (Quote-ForBash -Value $wrapperDir)) `
-        .Replace("__VAGRANT_BIN_DIR__", (Quote-ForBash -Value $vagrantBinDir)) `
-        .Replace("__VIRTUALBOX_BIN_DIR__", (Quote-ForBash -Value $virtualBoxBinDir)) `
-        .Replace("__VAGRANT_EXE_WSL_PATH__", (Quote-ForBash -Value $vagrantExeWslPath)) `
-        .Replace("__VIRTUALBOX_EXE_WSL_PATH__", (Quote-ForBash -Value $virtualBoxExeWslPath)) `
-        .Replace("__REPO_WSL_PATH__", (Quote-ForBash -Value $repoWslPath)) `
-        .Replace("__COMMAND__", $Command)
+    $linuxScript = $linuxScriptTemplate
+    $linuxScript = $linuxScript.Replace("__KEY_WSL_PATH__", (Quote-ForBash -Value $keyWslPath))
+    $linuxScript = $linuxScript.Replace("__WRAPPER_DIR__", (Quote-ForBash -Value $wrapperDir))
+    $linuxScript = $linuxScript.Replace("__VAGRANT_BIN_DIR__", (Quote-ForBash -Value $vagrantBinDir))
+    $linuxScript = $linuxScript.Replace("__VIRTUALBOX_BIN_DIR__", (Quote-ForBash -Value $virtualBoxBinDir))
+    $linuxScript = $linuxScript.Replace("__VAGRANT_EXE_WSL_PATH__", (Quote-ForBash -Value $vagrantExeWslPath))
+    $linuxScript = $linuxScript.Replace("__VIRTUALBOX_EXE_WSL_PATH__", (Quote-ForBash -Value $virtualBoxExeWslPath))
+    $linuxScript = $linuxScript.Replace("__REPO_WSL_PATH__", (Quote-ForBash -Value $repoWslPath))
+    $linuxScript = $linuxScript.Replace("__COMMAND__", $Command)
 
     Write-Host "[windows-wrapper] WSL distro: $resolvedDistro"
     Write-Host "[windows-wrapper] Repo path: $repoWslPath"
