@@ -25,9 +25,17 @@ function Convert-WindowsPathToWsl {
         [string]$Path
     )
 
-    $resolved = (Resolve-Path $Path).Path
-    $drive = $resolved.Substring(0, 1).ToLowerInvariant()
-    $suffix = $resolved.Substring(2).Replace("\", "/")
+    $candidate = $Path
+    if (Test-Path $Path) {
+        $candidate = (Resolve-Path $Path).Path
+    }
+
+    if ($candidate.Length -lt 3 -or $candidate[1] -ne ':') {
+        throw "Path '$Path' is not a valid Windows path."
+    }
+
+    $drive = $candidate.Substring(0, 1).ToLowerInvariant()
+    $suffix = $candidate.Substring(2).Replace("\", "/")
     return "/mnt/$drive$suffix"
 }
 
