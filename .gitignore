@@ -1,0 +1,11 @@
+.vagrant/
+*.box
+*.log
+*.tmp
+artifacts/*
+!artifacts/.gitkeep
+__pycache__/
+*.retry
+*.swp
+.DS_Store
+tasks.md

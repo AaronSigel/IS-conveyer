@@ -1,0 +1,56 @@
+policy:
+  id: "host-baseline-v1"
+  file: "host-baseline-v1-sca.yml"
+  name: "Custom host baseline for ib-host-audit-poc"
+  description: "Minimal executable subset of the local host baseline profile."
+  references:
+    - "profiles/host-baseline-v1.yml"
+
+checks:
+  - id: 10001
+    title: "PermitRootLogin is disabled"
+    description: "The effective SSH daemon configuration must disable root login."
+    remediation: "Set PermitRootLogin to no and restart ssh."
+    condition: all
+    rules:
+      - 'c:sshd -T -> r:^permitrootlogin no$'
+
+  - id: 10002
+    title: "PasswordAuthentication is disabled"
+    description: "The effective SSH daemon configuration must disable password authentication."
+    remediation: "Set PasswordAuthentication to no and restart ssh."
+    condition: all
+    rules:
+      - 'c:sshd -T -> r:^passwordauthentication no$'
+
+  - id: 10003
+    title: "Telnet package is absent"
+    description: "The telnet package must not be installed."
+    remediation: "Remove the telnet package."
+    condition: all
+    rules:
+      - 'not c:dpkg -s telnet -> r:Status: install ok installed'
+
+  - id: 10004
+    title: "Firewall is enabled"
+    description: "UFW must be active on the endpoint."
+    remediation: "Install and enable ufw."
+    condition: all
+    rules:
+      - 'c:ufw status -> r:^Status: active$'
+
+  - id: 10005
+    title: "Sensitive file permissions are restricted"
+    description: "The demo sensitive file must not be world-readable."
+    remediation: "Set permissions on /etc/ib-host-audit-poc/demo-sensitive.conf to 0640 or stricter."
+    condition: all
+    rules:
+      - 'c:stat -c %a /etc/ib-host-audit-poc/demo-sensitive.conf -> n:(\d+) compare <= 640'
+
+  - id: 10006
+    title: "rsh-redone-client package is absent"
+    description: "The rsh-redone-client package must not be installed."
+    remediation: "Remove the rsh-redone-client package."
+    condition: all
+    rules:
+      - 'not c:dpkg -s rsh-redone-client -> r:Status: install ok installed'

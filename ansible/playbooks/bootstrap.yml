@@ -1,0 +1,46 @@
+---
+- name: Bootstrap all virtual machines
+  hosts: all
+  become: true
+  gather_facts: false
+  vars_files:
+    - ../group_vars/all.yml
+
+  pre_tasks:
+    - name: Ensure Python and apt bindings are available
+      ansible.builtin.raw: |
+        test -x /usr/bin/python3 || (apt-get update -y && apt-get install -y python3 python3-apt)
+      changed_when: false
+
+    - name: Gather facts after Python bootstrap
+      ansible.builtin.setup:
+
+    - name: Free root filesystem space on fresh or partially installed Wazuh manager
+      ansible.builtin.shell: |
+        set -euo pipefail
+        apt-get clean
+        rm -rf /var/lib/apt/lists/*
+        rm -rf /var/cache/apt/archives/*
+
+        if [ -d /var/ossec ]; then
+          rm -rf /var/ossec/tmp/*
+
+          if ! mountpoint -q /var/ossec/queue; then
+            rm -rf \
+              /var/ossec/queue/vd_updater \
+              /var/ossec/queue/indexer \
+              /var/ossec/queue/vd
+          fi
+        fi
+      args:
+        executable: /bin/bash
+      changed_when: false
+      when: inventory_hostname in groups['wazuh']
+
+    - name: Refresh apt cache
+      ansible.builtin.apt:
+        update_cache: true
+        cache_valid_time: 3600
+
+  roles:
+    - role: common

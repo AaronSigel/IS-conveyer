@@ -1,0 +1,730 @@
+---
+- name: Install packages required by the Wazuh assistant
+  ansible.builtin.apt:
+    name: "{{ wazuh_manager_required_packages }}"
+    state: present
+
+- name: Ensure Wazuh install directory exists
+  ansible.builtin.file:
+    path: "{{ wazuh_install_dir }}"
+    state: directory
+    mode: "0755"
+
+- name: Detect Wazuh extra data disk for vulnerability feed cache
+  ansible.builtin.shell: |
+    set -euo pipefail
+    root_disk="$(findmnt -no SOURCE / | sed 's/[0-9]*$//')"
+    lsblk -pnro NAME,TYPE | awk -v root_disk="$root_disk" '$2 == "disk" && $1 != root_disk { print $1; exit }'
+  args:
+    executable: /bin/bash
+  register: wazuh_extra_disk_device
+  changed_when: false
+  when: not wazuh_manager_lightweight_mode
+
+- name: Fail if no extra data disk is available for vulnerability feed cache
+  ansible.builtin.assert:
+    that:
+      - wazuh_extra_disk_device.stdout | length > 0
+    fail_msg: "No extra disk detected for {{ wazuh_vd_updater_mount_path }}. Recreate the VM so Vagrant can attach the auxiliary disk."
+  when: not wazuh_manager_lightweight_mode
+
+- name: Create a partition on the extra Wazuh data disk
+  ansible.builtin.shell: |
+    set -euo pipefail
+    if ! lsblk -pnro NAME,TYPE "{{ wazuh_extra_disk_device.stdout }}" | awk '$2 == "part" { found = 1 } END { exit found ? 0 : 1 }'; then
+      parted -s "{{ wazuh_extra_disk_device.stdout }}" mklabel gpt
+      parted -s "{{ wazuh_extra_disk_device.stdout }}" mkpart primary ext4 1MiB 100%
+      partprobe "{{ wazuh_extra_disk_device.stdout }}"
+    fi
+  args:
+    executable: /bin/bash
+  when: not wazuh_manager_lightweight_mode
+
+- name: Ensure the extra Wazuh data disk has an ext4 filesystem
+  ansible.builtin.shell: |
+    set -euo pipefail
+    current_fs="$(blkid -o value -s TYPE "{{ wazuh_extra_disk_device.stdout }}1" 2>/dev/null || true)"
+    if [ "${current_fs}" != "ext4" ]; then
+      wipefs -a "{{ wazuh_extra_disk_device.stdout }}1" >/dev/null 2>&1 || true
+      mkfs.ext4 -F -L "{{ wazuh_vd_updater_fs_label }}" "{{ wazuh_extra_disk_device.stdout }}1"
+    fi
+  args:
+    executable: /bin/bash
+  when: not wazuh_manager_lightweight_mode
+
+- name: Read UUID of the extra Wazuh data disk partition
+  ansible.builtin.command:
+    cmd: blkid -o value -s UUID {{ wazuh_extra_disk_device.stdout }}1
+  register: wazuh_extra_disk_uuid
+  changed_when: false
+  when: not wazuh_manager_lightweight_mode
+
+- name: Ensure vulnerability feed cache mount point exists
+  ansible.builtin.file:
+    path: "{{ wazuh_data_mount_path }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  when: not wazuh_manager_lightweight_mode
+
+- name: Persist vulnerability feed cache mount in fstab
+  ansible.builtin.lineinfile:
+    path: /etc/fstab
+    regexp: "^UUID={{ wazuh_extra_disk_uuid.stdout | regex_escape() }}\\s+{{ wazuh_data_mount_path | regex_escape() }}\\s+ext4\\s+defaults\\s+0\\s+2$"
+    line: "UUID={{ wazuh_extra_disk_uuid.stdout }} {{ wazuh_data_mount_path }} ext4 defaults 0 2"
+    state: present
+  when: not wazuh_manager_lightweight_mode
+
+- name: Mount the extra Wazuh data disk for vulnerability feed cache
+  ansible.builtin.shell: |
+    set -euo pipefail
+    if ! mountpoint -q "{{ wazuh_data_mount_path }}"; then
+      mount "{{ wazuh_extra_disk_device.stdout }}1" "{{ wazuh_data_mount_path }}"
+    fi
+  args:
+    executable: /bin/bash
+  changed_when: false
+  when: not wazuh_manager_lightweight_mode
+
+- name: Ensure external Wazuh data directories exist
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  loop:
+    - "{{ wazuh_vd_updater_mount_path }}"
+    - "{{ wazuh_tmp_path }}"
+    - "{{ wazuh_logs_path }}"
+  when: not wazuh_manager_lightweight_mode
+
+- name: Ensure /var/ossec exists before redirecting heavy paths
+  ansible.builtin.file:
+    path: /var/ossec
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  when: not wazuh_manager_lightweight_mode
+
+- name: Ensure Wazuh bind-mount target directories exist
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  loop:
+    - /var/ossec/queue
+    - /var/ossec/tmp
+    - /var/ossec/logs
+  when: not wazuh_manager_lightweight_mode
+
+- name: Copy existing heavy Wazuh path contents to the external data disk
+  ansible.builtin.shell: |
+    set -euo pipefail
+
+    target_path="{{ item.target }}"
+    source_path="{{ item.source }}"
+
+    mkdir -p "${source_path}"
+    if mountpoint -q "${target_path}"; then
+      exit 0
+    fi
+
+    if [ -d "${target_path}" ]; then
+      cp -a "${target_path}"/. "${source_path}/" 2>/dev/null || true
+    fi
+  args:
+    executable: /bin/bash
+  loop:
+    - target: /var/ossec/queue
+      source: "{{ wazuh_vd_updater_mount_path }}"
+    - target: /var/ossec/tmp
+      source: "{{ wazuh_tmp_path }}"
+    - target: /var/ossec/logs
+      source: "{{ wazuh_logs_path }}"
+  when: not wazuh_manager_lightweight_mode
+
+- name: Persist Wazuh heavy path bind mounts in fstab
+  ansible.builtin.lineinfile:
+    path: /etc/fstab
+    regexp: "^{{ item.source | regex_escape() }}\\s+{{ item.target | regex_escape() }}\\s+none\\s+bind\\s+0\\s+0$"
+    line: "{{ item.source }} {{ item.target }} none bind 0 0"
+    state: present
+  loop:
+    - source: "{{ wazuh_vd_updater_mount_path }}"
+      target: /var/ossec/queue
+    - source: "{{ wazuh_tmp_path }}"
+      target: /var/ossec/tmp
+    - source: "{{ wazuh_logs_path }}"
+      target: /var/ossec/logs
+  when: not wazuh_manager_lightweight_mode
+
+- name: Mount Wazuh heavy paths from the external data disk
+  ansible.builtin.shell: |
+    set -euo pipefail
+    if ! mountpoint -q "{{ item.target }}"; then
+      mount --bind "{{ item.source }}" "{{ item.target }}"
+    fi
+  args:
+    executable: /bin/bash
+  changed_when: false
+  loop:
+    - source: "{{ wazuh_vd_updater_mount_path }}"
+      target: /var/ossec/queue
+    - source: "{{ wazuh_tmp_path }}"
+      target: /var/ossec/tmp
+    - source: "{{ wazuh_logs_path }}"
+      target: /var/ossec/logs
+  when: not wazuh_manager_lightweight_mode
+
+- name: Download Wazuh installation assistant
+  ansible.builtin.get_url:
+    url: "{{ wazuh_install_script_url }}"
+    dest: "{{ wazuh_install_dir }}/wazuh-install.sh"
+    mode: "0755"
+
+- name: Render Wazuh assistant configuration
+  ansible.builtin.template:
+    src: config.yml.j2
+    dest: "{{ wazuh_assistant_config_path }}"
+    owner: root
+    group: root
+    mode: "0600"
+
+- name: Generate Wazuh configuration and certificates bundle
+  ansible.builtin.command:
+    cmd: bash "{{ wazuh_install_dir }}/wazuh-install.sh" -g -i
+    creates: "{{ wazuh_password_archive_path }}"
+    chdir: "{{ wazuh_install_dir }}"
+
+- name: Install Wazuh indexer node
+  ansible.builtin.command:
+    cmd: bash "{{ wazuh_install_dir }}/wazuh-install.sh" -wi wazuh-indexer -i -o
+    creates: /etc/wazuh-indexer/opensearch.yml
+    chdir: "{{ wazuh_install_dir }}"
+  when: not wazuh_manager_lightweight_mode
+
+- name: Clean apt cache after indexer installation
+  ansible.builtin.command:
+    cmd: apt-get clean
+  when: not wazuh_manager_lightweight_mode
+
+- name: Ensure Wazuh indexer log directory exists
+  ansible.builtin.file:
+    path: /var/log/wazuh-indexer
+    state: directory
+    owner: wazuh-indexer
+    group: wazuh-indexer
+    mode: "0750"
+  when: not wazuh_manager_lightweight_mode
+
+- name: Install Wazuh server node
+  ansible.builtin.command:
+    cmd: bash "{{ wazuh_install_dir }}/wazuh-install.sh" -ws wazuh-server -i -o
+    creates: /var/ossec/etc/ossec.conf
+    chdir: "{{ wazuh_install_dir }}"
+
+- name: Clean apt cache after Wazuh server installation
+  ansible.builtin.command:
+    cmd: apt-get clean
+
+- name: Initialize Wazuh indexer security when required
+  ansible.builtin.shell: |
+    set -euo pipefail
+    if curl -sk https://127.0.0.1:9200 | grep -q "OpenSearch Security not initialized."; then
+      bash "{{ wazuh_install_dir }}/wazuh-install.sh" -s
+      echo "changed"
+    fi
+  args:
+    chdir: "{{ wazuh_install_dir }}"
+    executable: /bin/bash
+  register: wazuh_indexer_security_init
+  changed_when: "'changed' in wazuh_indexer_security_init.stdout"
+  when: not wazuh_manager_lightweight_mode
+
+- name: Extract generated passwords file
+  ansible.builtin.shell: |
+    set -euo pipefail
+    tar -axf "{{ wazuh_password_archive_path }}" wazuh-install-files/wazuh-passwords.txt -O > "{{ wazuh_passwords_output_path }}"
+  args:
+    creates: "{{ wazuh_passwords_output_path }}"
+    executable: /bin/bash
+
+- name: Read Wazuh passwords file
+  ansible.builtin.slurp:
+    src: "{{ wazuh_passwords_output_path }}"
+  register: wazuh_passwords_raw
+
+- name: Parse Wazuh passwords from install output
+  ansible.builtin.set_fact:
+    wazuh_api_password_value: "{{ (wazuh_passwords_raw.content | b64decode | regex_findall(\"api_username: 'wazuh'\\n\\s+api_password: '([^']+)'\") | first | default('')) }}"
+
+- name: Parse dashboard and indexer passwords from install output
+  ansible.builtin.set_fact:
+    wazuh_dashboard_password_value: "{{ (wazuh_passwords_raw.content | b64decode | regex_findall(\"indexer_username: 'admin'\\n\\s+indexer_password: '([^']+)'\") | first | default('')) }}"
+    wazuh_indexer_dashboard_password_value: "{{ (wazuh_passwords_raw.content | b64decode | regex_findall(\"indexer_username: 'kibanaserver'\\n\\s+indexer_password: '([^']+)'\") | first | default('')) }}"
+    wazuh_dashboard_api_password_value: "{{ (wazuh_passwords_raw.content | b64decode | regex_findall(\"api_username: 'wazuh-wui'\\n\\s+api_password: '([^']+)'\") | first | default('')) }}"
+  when: not wazuh_manager_lightweight_mode
+
+- name: Fail if Wazuh credentials were not parsed
+  ansible.builtin.assert:
+    that:
+      - wazuh_api_password_value | length > 0
+    fail_msg: "Unable to parse one or more Wazuh passwords from wazuh-passwords.txt"
+
+- name: Fail if dashboard credentials were not parsed
+  ansible.builtin.assert:
+    that:
+      - wazuh_dashboard_password_value | length > 0
+      - wazuh_indexer_dashboard_password_value | length > 0
+      - wazuh_dashboard_api_password_value | length > 0
+    fail_msg: "Unable to parse one or more Wazuh dashboard/indexer passwords from wazuh-passwords.txt"
+  when: not wazuh_manager_lightweight_mode
+
+- name: Verify parsed indexer admin credentials against the local indexer
+  ansible.builtin.shell: |
+    set -euo pipefail
+    curl -sk -o /dev/null -w '%{http_code}' -u "admin:{{ wazuh_dashboard_password_value }}" https://127.0.0.1:9200
+  args:
+    executable: /bin/bash
+  register: wazuh_indexer_admin_auth_check
+  changed_when: false
+  when: not wazuh_manager_lightweight_mode
+
+- name: Fall back to demo indexer credentials when generated passwords are not active
+  ansible.builtin.set_fact:
+    wazuh_dashboard_password_value: "admin"
+    wazuh_indexer_dashboard_password_value: "kibanaserver"
+  when:
+    - not wazuh_manager_lightweight_mode
+    - wazuh_indexer_admin_auth_check.stdout != "200"
+
+- name: Stop Wazuh manager temporarily before dashboard install
+  ansible.builtin.systemd:
+    name: wazuh-manager
+    state: stopped
+  when: not wazuh_manager_lightweight_mode
+
+- name: Ensure Wazuh temporary runtime directory exists on the extra data disk
+  ansible.builtin.file:
+    path: "{{ wazuh_tmp_path }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  when: not wazuh_manager_lightweight_mode
+
+- name: Clean temporary vulnerability feed data before installing dashboard
+  ansible.builtin.shell: |
+    set -euo pipefail
+    rm -rf "{{ wazuh_vd_updater_mount_path }}/vd_updater/tmp" "{{ wazuh_vd_updater_mount_path }}/vd_updater/downloads" "{{ wazuh_vd_updater_mount_path }}/vd_updater/contents"
+    mkdir -p "{{ wazuh_vd_updater_mount_path }}/vd_updater/tmp"
+    apt-get clean
+    rm -rf /var/cache/apt/archives/* /var/lib/apt/lists/*
+  args:
+    executable: /bin/bash
+  when: not wazuh_manager_lightweight_mode
+
+- name: Wait for apt and dpkg locks before dashboard repository refresh
+  ansible.builtin.shell: |
+    set -euo pipefail
+    while fuser /var/lib/apt/lists/lock /var/lib/dpkg/lock-frontend /var/lib/dpkg/lock >/dev/null 2>&1; do
+      sleep 5
+    done
+  args:
+    executable: /bin/bash
+  changed_when: false
+  when: not wazuh_manager_lightweight_mode
+
+- name: Install Wazuh dashboard package
+  ansible.builtin.shell: |
+    set -euo pipefail
+    curl -s https://packages.wazuh.com/key/GPG-KEY-WAZUH | \
+      gpg --no-default-keyring --keyring gnupg-ring:/usr/share/keyrings/wazuh.gpg --import
+    chmod 644 /usr/share/keyrings/wazuh.gpg
+    printf '%s\n' '{{ wazuh_packages_repo_apt }}' > /etc/apt/sources.list.d/wazuh.list
+    apt-get update
+  args:
+    executable: /bin/bash
+  when: not wazuh_manager_lightweight_mode
+
+- name: Install Wazuh dashboard package
+  ansible.builtin.apt:
+    name: wazuh-dashboard
+    state: present
+  when: not wazuh_manager_lightweight_mode
+
+- name: Ensure Wazuh dashboard certificates directory exists
+  ansible.builtin.file:
+    path: /etc/wazuh-dashboard/certs
+    state: directory
+    owner: wazuh-dashboard
+    group: wazuh-dashboard
+    mode: "0500"
+  when: not wazuh_manager_lightweight_mode
+
+- name: Extract dashboard certificates from the generated tarball
+  ansible.builtin.shell: |
+    set -euo pipefail
+    tar -axf "{{ wazuh_password_archive_path }}" -C /etc/wazuh-dashboard/certs \
+      wazuh-install-files/wazuh-dashboard.pem \
+      wazuh-install-files/wazuh-dashboard-key.pem \
+      wazuh-install-files/root-ca.pem \
+      --strip-components 1
+    chown wazuh-dashboard:wazuh-dashboard /etc/wazuh-dashboard/certs/*
+    chmod 400 /etc/wazuh-dashboard/certs/*
+  args:
+    creates: /etc/wazuh-dashboard/certs/wazuh-dashboard.pem
+    executable: /bin/bash
+  when: not wazuh_manager_lightweight_mode
+
+- name: Ensure compatibility symlinks exist for manager indexer certificates
+  ansible.builtin.file:
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+    state: link
+    force: true
+  loop:
+    - src: /etc/filebeat/certs/wazuh-server.pem
+      dest: /etc/filebeat/certs/filebeat.pem
+    - src: /etc/filebeat/certs/wazuh-server-key.pem
+      dest: /etc/filebeat/certs/filebeat-key.pem
+  when: not wazuh_manager_lightweight_mode
+
+- name: Configure Wazuh dashboard connection to indexer
+  ansible.builtin.template:
+    src: opensearch_dashboards.yml.j2
+    dest: /etc/wazuh-dashboard/opensearch_dashboards.yml
+    owner: root
+    group: wazuh-dashboard
+    mode: "0640"
+  when: not wazuh_manager_lightweight_mode
+
+- name: Ensure Wazuh dashboard keystore exists
+  ansible.builtin.command:
+    cmd: /usr/share/wazuh-dashboard/bin/opensearch-dashboards-keystore --allow-root create
+    creates: /etc/wazuh-dashboard/opensearch_dashboards.keystore
+  when: not wazuh_manager_lightweight_mode
+
+- name: Store indexer password in the Wazuh dashboard keystore
+  ansible.builtin.shell: |
+    set -euo pipefail
+    printf '%s' '{{ wazuh_indexer_dashboard_password_value }}' | \
+      /usr/share/wazuh-dashboard/bin/opensearch-dashboards-keystore --allow-root add -f --stdin opensearch.password
+  args:
+    executable: /bin/bash
+  when: not wazuh_manager_lightweight_mode
+
+- name: Ensure Wazuh dashboard app config directory exists
+  ansible.builtin.file:
+    path: /usr/share/wazuh-dashboard/data/wazuh/config
+    state: directory
+    owner: wazuh-dashboard
+    group: wazuh-dashboard
+    mode: "0750"
+  when: not wazuh_manager_lightweight_mode
+
+- name: Point the Wazuh dashboard plugin to the local API
+  ansible.builtin.template:
+    src: wazuh-dashboard-app.yml.j2
+    dest: /usr/share/wazuh-dashboard/data/wazuh/config/wazuh.yml
+    owner: wazuh-dashboard
+    group: wazuh-dashboard
+    mode: "0640"
+  when: not wazuh_manager_lightweight_mode
+
+- name: Clean apt cache after dashboard installation
+  ansible.builtin.command:
+    cmd: apt-get clean
+  when: not wazuh_manager_lightweight_mode
+
+- name: Ensure Wazuh services are enabled and running
+  ansible.builtin.systemd:
+    name: "{{ item }}"
+    enabled: true
+    state: started
+  loop: "{{ wazuh_manager_required_services if wazuh_manager_lightweight_mode else wazuh_services }}"
+
+- name: Enable manager-side vulnerability detection in full-stack mode
+  ansible.builtin.replace:
+    path: /var/ossec/etc/ossec.conf
+    regexp: '(?s)<vulnerability-detection>.*?</vulnerability-detection>'
+    replace: |2
+        <vulnerability-detection>
+          <enabled>yes</enabled>
+          <index-status>yes</index-status>
+          <feed-update-interval>60m</feed-update-interval>
+        </vulnerability-detection>
+  when: not wazuh_manager_lightweight_mode
+  notify: Restart wazuh-manager
+
+- name: Enable manager-side indexer integration in full-stack mode
+  ansible.builtin.replace:
+    path: /var/ossec/etc/ossec.conf
+    regexp: '(?s)<indexer>.*?</indexer>'
+    replace: |2
+        <indexer>
+          <enabled>yes</enabled>
+          <hosts>
+            <host>https://127.0.0.1:9200</host>
+          </hosts>
+          <ssl>
+            <certificate_authorities>
+              <ca>/etc/filebeat/certs/root-ca.pem</ca>
+            </certificate_authorities>
+            <certificate>/etc/filebeat/certs/wazuh-server.pem</certificate>
+            <key>/etc/filebeat/certs/wazuh-server-key.pem</key>
+          </ssl>
+        </indexer>
+  when: not wazuh_manager_lightweight_mode
+  notify: Restart wazuh-manager
+
+- name: Disable manager-side vulnerability detection in lightweight mode
+  ansible.builtin.replace:
+    path: /var/ossec/etc/ossec.conf
+    regexp: '(?s)<vulnerability-detection>.*?</vulnerability-detection>'
+    replace: |2
+        <vulnerability-detection>
+          <enabled>no</enabled>
+        </vulnerability-detection>
+  when: wazuh_manager_lightweight_mode
+  notify: Restart wazuh-manager
+
+- name: Disable manager-side indexer integration in lightweight mode
+  ansible.builtin.replace:
+    path: /var/ossec/etc/ossec.conf
+    regexp: '(?s)<indexer>.*?</indexer>'
+    replace: |2
+        <indexer>
+          <enabled>no</enabled>
+        </indexer>
+  when: wazuh_manager_lightweight_mode
+  notify: Restart wazuh-manager
+
+- name: Disable manager-side syscheck in lightweight mode
+  ansible.builtin.replace:
+    path: /var/ossec/etc/ossec.conf
+    regexp: '(<syscheck>\s*<disabled>)no(</disabled>)'
+    replace: '\1yes\2'
+  when: wazuh_manager_lightweight_mode
+  notify: Restart wazuh-manager
+
+- name: Stop and disable heavy Wazuh services in lightweight mode
+  ansible.builtin.command:
+    cmd: "systemctl disable --now {{ item }}"
+  loop: "{{ wazuh_manager_disabled_services }}"
+  changed_when: false
+  failed_when: false
+  when: wazuh_manager_lightweight_mode
+
+- name: Reset failed state for heavy Wazuh services in lightweight mode
+  ansible.builtin.command:
+    cmd: "systemctl reset-failed {{ item }}"
+  loop: "{{ wazuh_manager_disabled_services }}"
+  changed_when: false
+  failed_when: false
+  when: wazuh_manager_lightweight_mode
+
+- name: Remove heavy Wazuh runtime queues in lightweight mode
+  ansible.builtin.shell: |
+    set -euo pipefail
+    rm -rf \
+      /var/ossec/queue/vd_updater/tmp \
+      /var/ossec/queue/vd_updater/downloads \
+      /var/ossec/queue/vd_updater/contents \
+      /var/ossec/queue/vd/feed \
+      /var/ossec/queue/vd/event \
+      /var/ossec/queue/vd/delayed \
+      /var/ossec/queue/vd/reports \
+      /var/ossec/queue/vd/inventory \
+      /var/ossec/queue/indexer
+    mkdir -p /var/ossec/queue/vd_updater/tmp
+  args:
+    executable: /bin/bash
+  when: wazuh_manager_lightweight_mode
+
+- name: Ensure only required Wazuh services stay enabled in lightweight mode
+  ansible.builtin.systemd:
+    name: "{{ item }}"
+    state: started
+    enabled: true
+  loop: "{{ wazuh_manager_required_services }}"
+  when: wazuh_manager_lightweight_mode
+
+- name: Flush manager handlers before health checks
+  ansible.builtin.meta: flush_handlers
+
+- name: Wait for Wazuh manager API
+  ansible.builtin.wait_for:
+    port: 55000
+    host: "{{ wazuh_manager_ip }}"
+    delay: 10
+    timeout: 900
+
+- name: Wait for Wazuh dashboard
+  ansible.builtin.wait_for:
+    port: 443
+    host: "{{ wazuh_manager_ip }}"
+    delay: 10
+    timeout: 900
+  when: not wazuh_manager_lightweight_mode
+
+- name: Wait until the Wazuh dashboard status endpoint is ready
+  ansible.builtin.uri:
+    url: "https://{{ wazuh_manager_ip }}/status"
+    method: GET
+    user: "{{ wazuh_dashboard_admin_user }}"
+    password: "{{ wazuh_dashboard_password_value }}"
+    force_basic_auth: true
+    validate_certs: false
+    status_code: 200
+  register: wazuh_dashboard_status
+  failed_when: false
+  until: (wazuh_dashboard_status.status | default(0)) == 200
+  retries: 20
+  delay: 15
+  when: not wazuh_manager_lightweight_mode
+
+- name: Wait for Wazuh indexer
+  ansible.builtin.wait_for:
+    port: 9200
+    host: 127.0.0.1
+    delay: 10
+    timeout: 900
+  when: not wazuh_manager_lightweight_mode
+
+- name: Ensure manager credential output directory exists
+  ansible.builtin.file:
+    path: /etc/ib-host-audit-poc
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Persist manager-side credentials summary
+  ansible.builtin.copy:
+    dest: /etc/ib-host-audit-poc/wazuh-credentials.env
+    owner: root
+    group: root
+    mode: "0600"
+    content: |
+      WAZUH_MANAGER_IP={{ wazuh_manager_ip }}
+      WAZUH_API_URL={{ wazuh_api_url }}
+      WAZUH_API_USER={{ wazuh_api_user }}
+      WAZUH_API_PASSWORD={{ wazuh_api_password_value }}
+      WAZUH_INDEXER_URL={{ wazuh_indexer_url }}
+      WAZUH_INDEXER_USER={{ wazuh_indexer_user }}
+      WAZUH_INDEXER_PASSWORD={{ wazuh_dashboard_password_value if not wazuh_manager_lightweight_mode else '' }}
+
+- name: Ensure local artifacts directory exists
+  ansible.builtin.file:
+    path: "{{ wazuh_artifacts_dir }}"
+    state: directory
+    mode: "0755"
+  delegate_to: localhost
+  become: false
+
+- name: Save Wazuh API password on the host
+  ansible.builtin.copy:
+    dest: "{{ wazuh_api_password_file }}"
+    mode: "0600"
+    content: "{{ wazuh_api_password_value }}\n"
+  delegate_to: localhost
+  become: false
+
+- name: Save Wazuh dashboard password on the host
+  ansible.builtin.copy:
+    dest: "{{ wazuh_dashboard_password_file }}"
+    mode: "0600"
+    content: "{{ wazuh_dashboard_password_value }}\n"
+  delegate_to: localhost
+  become: false
+  when: not wazuh_manager_lightweight_mode
+
+- name: Save Wazuh indexer password on the host
+  ansible.builtin.copy:
+    dest: "{{ wazuh_indexer_password_file }}"
+    mode: "0600"
+    content: "{{ wazuh_dashboard_password_value }}\n"
+  delegate_to: localhost
+  become: false
+  when: not wazuh_manager_lightweight_mode
+
+- name: Remove stale Wazuh dashboard password on the host in lightweight mode
+  ansible.builtin.file:
+    path: "{{ wazuh_dashboard_password_file }}"
+    state: absent
+  delegate_to: localhost
+  become: false
+  when: wazuh_manager_lightweight_mode
+
+- name: Remove stale Wazuh indexer password on the host in lightweight mode
+  ansible.builtin.file:
+    path: "{{ wazuh_indexer_password_file }}"
+    state: absent
+  delegate_to: localhost
+  become: false
+  when: wazuh_manager_lightweight_mode
+
+- name: Save Wazuh credentials env on the host
+  ansible.builtin.copy:
+    dest: "{{ wazuh_credentials_env_file }}"
+    mode: "0600"
+    content: |
+      WAZUH_MANAGER_IP={{ wazuh_manager_ip }}
+      WAZUH_API_URL={{ wazuh_api_url }}
+      WAZUH_API_USER={{ wazuh_api_user }}
+      WAZUH_API_PASSWORD={{ wazuh_api_password_value }}
+      WAZUH_INDEXER_URL={{ wazuh_indexer_url }}
+      WAZUH_INDEXER_USER={{ wazuh_indexer_user }}
+      WAZUH_INDEXER_PASSWORD={{ wazuh_dashboard_password_value if not wazuh_manager_lightweight_mode else '' }}
+  delegate_to: localhost
+  become: false
+
+- name: Configure Wazuh manager indexer connector username
+  ansible.builtin.command:
+    cmd: /var/ossec/bin/wazuh-keystore -f indexer -k username -v {{ wazuh_indexer_admin_user }}
+  changed_when: false
+  notify: Restart wazuh-manager
+  when: not wazuh_manager_lightweight_mode
+
+- name: Configure Wazuh manager indexer connector password
+  ansible.builtin.command:
+    cmd: /var/ossec/bin/wazuh-keystore -f indexer -k password -v {{ wazuh_dashboard_password_value }}
+  changed_when: false
+  notify: Restart wazuh-manager
+  when: not wazuh_manager_lightweight_mode
+
+- name: Deploy centralized agent configuration
+  ansible.builtin.template:
+    src: agent.conf.j2
+    dest: /var/ossec/etc/shared/default/agent.conf
+    owner: root
+    group: wazuh
+    mode: "0640"
+  notify: Restart wazuh-manager
+
+- name: Deploy custom SCA policy to shared directory
+  ansible.builtin.template:
+    src: host-baseline-v1-sca.yml.j2
+    dest: "{{ sca_policy_remote_path }}"
+    owner: wazuh
+    group: wazuh
+    mode: "0640"
+  notify: Restart wazuh-manager
+
+- name: Flush handler to publish shared configuration
+  ansible.builtin.meta: flush_handlers
+
+- name: Verify manager reports agent list
+  ansible.builtin.command: /var/ossec/bin/agent_control -l
+  register: agent_control_output
+  changed_when: false
+
+- name: Show current agent list
+  ansible.builtin.debug:
+    var: agent_control_output.stdout_lines

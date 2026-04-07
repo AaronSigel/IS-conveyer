@@ -1,0 +1,5 @@
+---
+- name: Restart Wazuh agent
+  ansible.builtin.systemd:
+    name: "{{ wazuh_agent_service_name }}"
+    state: restarted

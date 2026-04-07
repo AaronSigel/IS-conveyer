@@ -1,0 +1,58 @@
+profile: host-baseline-v1
+metadata:
+  version: 1
+  owner: infra-security
+  description: Minimal host security baseline for the PoC stand.
+
+checks:
+  - id: ssh-permit-root-login-disabled
+    title: PermitRootLogin disabled
+    description: Root login over SSH must be disabled.
+    target: sshd.PermitRootLogin
+    expected: "no"
+    severity: high
+    remediation: Set `PermitRootLogin no` in sshd configuration.
+
+  - id: ssh-password-authentication-disabled
+    title: PasswordAuthentication disabled
+    description: Password authentication over SSH must be disabled.
+    target: sshd.PasswordAuthentication
+    expected: "no"
+    severity: high
+    remediation: Set `PasswordAuthentication no` in sshd configuration.
+
+  - id: package-telnet-absent
+    title: Telnet package absent
+    description: Legacy telnet client/server packages must not be installed.
+    target: packages
+    expected:
+      absent:
+        - telnet
+        - telnetd
+    severity: medium
+    remediation: Remove telnet-related packages.
+
+  - id: firewall-enabled
+    title: Firewall enabled
+    description: Host firewall must be enabled and active.
+    target: firewall
+    expected:
+      enabled: true
+    severity: high
+    remediation: Enable and configure the local firewall.
+
+  - id: sensitive-file-permissions-restricted
+    title: Sensitive file permissions restricted
+    description: Sensitive files must not be world-readable.
+    target: file_permissions
+    expected:
+      path: /etc/ib-host-audit-poc/demo-sensitive.conf
+      mode_max: "0640"
+    severity: medium
+    remediation: Restrict mode and ownership on sensitive files.
+
+denylist:
+  packages:
+    - telnet
+    - telnetd
+    - rsh-redone-client

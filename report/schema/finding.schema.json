@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Security Finding",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "host",
+    "source",
+    "category",
+    "rule_id",
+    "title",
+    "severity",
+    "status",
+    "evidence",
+    "remediation"
+  ],
+  "properties": {
+    "host": {
+      "type": "string"
+    },
+    "source": {
+      "type": "string"
+    },
+    "category": {
+      "type": "string"
+    },
+    "rule_id": {
+      "type": "string"
+    },
+    "title": {
+      "type": "string"
+    },
+    "severity": {
+      "type": "string",
+      "enum": ["low", "medium", "high", "critical"]
+    },
+    "status": {
+      "type": "string",
+      "enum": ["pass", "fail", "warn", "info"]
+    },
+    "evidence": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "remediation": {
+      "type": "string"
+    }
+  }
+}

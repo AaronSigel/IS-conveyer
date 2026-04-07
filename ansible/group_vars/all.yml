@@ -1,0 +1,47 @@
+project_name: ib-host-audit-poc
+profile_name: host-baseline-v1
+wazuh_manager_ip: 192.168.56.10
+wazuh_host_access_ip: "{{ lookup('env', 'WINDOWS_HOST_IP') | default('127.0.0.1', true) }}"
+wazuh_manager_hostname: wazuh
+wazuh_api_url: "https://{{ wazuh_host_access_ip }}:55000"
+wazuh_version_major: "4.14"
+wazuh_install_script_url: "https://packages.wazuh.com/{{ wazuh_version_major }}/wazuh-install.sh"
+wazuh_packages_repo_apt: "deb [signed-by=/usr/share/keyrings/wazuh.gpg] https://packages.wazuh.com/4.x/apt/ stable main"
+wazuh_install_dir: /root/wazuh-install
+wazuh_assistant_config_path: "{{ wazuh_install_dir }}/config.yml"
+wazuh_password_archive_path: "{{ wazuh_install_dir }}/wazuh-install-files.tar"
+wazuh_passwords_output_path: "{{ wazuh_install_dir }}/wazuh-passwords.txt"
+wazuh_data_mount_path: /srv/wazuh-data
+wazuh_vd_updater_mount_path: "{{ wazuh_data_mount_path }}/queue"
+wazuh_tmp_path: "{{ wazuh_data_mount_path }}/tmp"
+wazuh_logs_path: "{{ wazuh_data_mount_path }}/logs"
+wazuh_vd_updater_fs_label: wazuh-vd-updater
+wazuh_artifacts_dir: "{{ playbook_dir }}/../../artifacts"
+wazuh_api_user: wazuh
+wazuh_api_password_file: "{{ wazuh_artifacts_dir }}/wazuh-api-password.txt"
+wazuh_indexer_url: "https://{{ wazuh_host_access_ip }}:9200"
+wazuh_indexer_user: admin
+wazuh_indexer_password_file: "{{ wazuh_artifacts_dir }}/wazuh-indexer-password.txt"
+wazuh_credentials_env_file: "{{ wazuh_artifacts_dir }}/wazuh-credentials.env"
+wazuh_shared_group: default
+sca_policy_relpath: "etc/custom/{{ profile_name }}-sca.yml"
+sca_policy_remote_path: "/var/ossec/etc/shared/default/{{ profile_name }}-sca.yml"
+wazuh_agent_local_sca_policy_path: "/var/ossec/{{ sca_policy_relpath }}"
+wazuh_agent_local_config_block_marker: "IB HOST AUDIT POC SCA"
+target_baseline_state: drifting
+target_baseline_drift_packages:
+  target1:
+    - telnet
+  target2:
+    - rsh-redone-client
+target_baseline_forbidden_packages:
+  - telnet
+  - rsh-redone-client
+target_baseline_sensitive_mode_drift:
+  target1: "0644"
+  target2: "0666"
+target_baseline_sensitive_mode_compliant: "0640"
+ansible_user: vagrant
+ansible_ssh_private_key_file: "{{ lookup('env', 'VAGRANT_INSECURE_PRIVATE_KEY') | default('~/.vagrant.d/insecure_private_key', true) }}"
+ansible_python_interpreter: /usr/bin/python3
+project_root_on_target: /opt/ib-host-audit-poc

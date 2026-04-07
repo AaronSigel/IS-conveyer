@@ -1,0 +1,7 @@
+hosts:
+  - default:
+      url: https://{{ wazuh_manager_ip }}
+      port: 55000
+      username: {{ wazuh_api_admin_user }}
+      password: {{ wazuh_dashboard_api_password_value }}
+      run_as: false

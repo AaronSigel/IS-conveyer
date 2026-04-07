@@ -1,0 +1,11 @@
+---
+- name: Configure target hosts for baseline PoC
+  hosts: targets
+  become: true
+  vars_files:
+    - ../group_vars/all.yml
+  vars:
+    target_baseline_apply_remediation: "{{ target_baseline_state == 'compliant' }}"
+
+  roles:
+    - role: target_baseline

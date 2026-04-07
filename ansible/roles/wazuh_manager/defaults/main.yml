@@ -1,0 +1,28 @@
+---
+wazuh_manager_lightweight_mode: false
+wazuh_indexer_admin_user: admin
+wazuh_dashboard_admin_user: admin
+wazuh_api_admin_user: wazuh-wui
+wazuh_dashboard_password_file: "{{ wazuh_artifacts_dir }}/wazuh-dashboard-password.txt"
+wazuh_services:
+  - wazuh-indexer
+  - wazuh-manager
+  - filebeat
+  - wazuh-dashboard
+wazuh_manager_required_services:
+  - wazuh-manager
+wazuh_manager_disabled_services:
+  - wazuh-indexer
+  - filebeat
+  - wazuh-dashboard
+wazuh_manager_required_packages:
+  - curl
+  - tar
+  - gnupg
+  - apt-transport-https
+  - debconf
+  - adduser
+  - procps
+  - libcap2-bin
+  - parted
+  - e2fsprogs
