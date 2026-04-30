@@ -9,6 +9,8 @@
 - поднимает 3 виртуальные машины через `Vagrant`;
 - настраивается `Ansible` с хоста;
 - разворачивает `Wazuh manager`, `Wazuh agents`, `Wazuh API`, `Wazuh indexer` и `Wazuh dashboard`;
+- доставляет custom Wazuh SCA policy `host-baseline-v1`;
+- проверяет расширенный профиль Ubuntu 24.04: SSH hardening, UFW firewall, права файлов, denylist-пакеты, audit/logging и time sync;
 - позволяет автономно пройти путь от старта VM до готового markdown-отчёта.
 
 ## Зависимости
@@ -98,6 +100,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\windows\e2e.ps1
 ./scripts/up.sh
 ./scripts/provision.sh
 ./scripts/smoke-test.sh
+python scripts/validate-profile.py profiles/host-baseline-v1.yml
 ./scripts/run-host-scan.py
 ./scripts/collect-report.sh
 ```
@@ -149,6 +152,20 @@ powershell -ExecutionPolicy Bypass -File .\scripts\windows\e2e.ps1
 ./scripts/provision.sh -e target_baseline_state=compliant
 ./scripts/scan-and-report.sh
 ```
+
+Вернуть targets к демонстрационным нарушениям:
+
+```bash
+./scripts/provision.sh -e target_baseline_state=drifting
+./scripts/scan-and-report.sh
+```
+
+Итоговые данные:
+
+- `artifacts/unified-findings.json`: нормализованные findings;
+- `artifacts/raw-wazuh-alerts.json`: raw Wazuh API snapshot;
+- `artifacts/raw-wazuh-vulnerabilities.json`: raw Wazuh indexer vulnerability snapshot;
+- `artifacts/draft-report.md`: markdown-отчёт.
 
 ## Удаление стенда
 

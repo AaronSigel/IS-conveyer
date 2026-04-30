@@ -1,0 +1,21 @@
+---
+- name: Validate target security state
+  ansible.builtin.assert:
+    that:
+      - target_security_state in ["compliant", "vulnerable"]
+      - ssh_permit_root_login in ["yes", "no", "prohibit-password", "forced-commands-only"]
+      - ssh_password_authentication in ["yes", "no"]
+      - sensitive_file_mode is match("^[0-7]{4}$")
+    fail_msg: "Invalid target_state variables for {{ inventory_hostname }}"
+
+- name: Configure SSH state
+  ansible.builtin.import_tasks: ssh.yml
+
+- name: Configure firewall state
+  ansible.builtin.import_tasks: firewall.yml
+
+- name: Configure forbidden package state
+  ansible.builtin.import_tasks: packages.yml
+
+- name: Configure sensitive file state
+  ansible.builtin.import_tasks: files.yml

@@ -1,0 +1,13 @@
+---
+target_security_state: vulnerable
+
+ssh_permit_root_login: "yes"
+ssh_password_authentication: "yes"
+
+firewall_enabled: false
+
+forbidden_packages:
+  - telnet
+
+sensitive_file_path: /tmp/demo-sensitive.txt
+sensitive_file_mode: "0777"

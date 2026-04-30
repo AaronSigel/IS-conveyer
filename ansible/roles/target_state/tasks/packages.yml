@@ -1,0 +1,14 @@
+---
+- name: Remove forbidden packages on compliant host
+  ansible.builtin.apt:
+    name: "{{ forbidden_packages }}"
+    state: absent
+    purge: true
+  when: target_security_state == "compliant"
+
+- name: Install forbidden packages on vulnerable host
+  ansible.builtin.apt:
+    name: "{{ forbidden_packages }}"
+    state: present
+    update_cache: true
+  when: target_security_state == "vulnerable"

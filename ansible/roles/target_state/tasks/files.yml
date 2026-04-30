@@ -1,0 +1,9 @@
+---
+- name: Create demo sensitive file
+  ansible.builtin.copy:
+    dest: "{{ sensitive_file_path }}"
+    content: |
+      demo_secret=for_scan_demo_only
+    owner: root
+    group: root
+    mode: "{{ sensitive_file_mode }}"

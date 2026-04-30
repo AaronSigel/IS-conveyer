@@ -12,6 +12,8 @@ import urllib.request
 from collections import Counter
 from urllib.error import HTTPError, URLError
 
+import yaml
+
 
 PROJECT_ROOT = pathlib.Path(__file__).resolve().parents[1]
 ARTIFACTS_DIR = PROJECT_ROOT / "artifacts"
@@ -20,48 +22,29 @@ DEFAULT_ALERTS_OUTPUT = ARTIFACTS_DIR / "raw-wazuh-alerts.json"
 DEFAULT_VULNS_OUTPUT = ARTIFACTS_DIR / "raw-wazuh-vulnerabilities.json"
 CREDS_PATH = ARTIFACTS_DIR / "wazuh-credentials.env"
 SCHEMA_PATH = PROJECT_ROOT / "report" / "schema" / "finding.schema.json"
+PROFILE_PATH = PROJECT_ROOT / "profiles" / "host-baseline-v1.yml"
 
 DEFAULT_TARGETS = ("target1", "target2")
 SCA_POLICY_ID = "host-baseline-v1"
 DEFAULT_VAGRANT_PRIVATE_KEY = os.environ.get("VAGRANT_INSECURE_PRIVATE_KEY", "~/.vagrant.d/insecure_private_key")
-SCA_RULES = {
-    10001: {
-        "rule_id": "ssh-permit-root-login-disabled",
-        "title": "PermitRootLogin disabled",
-        "category": "configuration",
-        "severity": "high",
-    },
-    10002: {
-        "rule_id": "ssh-password-authentication-disabled",
-        "title": "PasswordAuthentication disabled",
-        "category": "configuration",
-        "severity": "high",
-    },
-    10003: {
-        "rule_id": "package-telnet-absent",
-        "title": "Telnet package absent",
-        "category": "software",
-        "severity": "medium",
-    },
-    10004: {
-        "rule_id": "firewall-enabled",
-        "title": "Firewall enabled",
-        "category": "configuration",
-        "severity": "high",
-    },
-    10005: {
-        "rule_id": "sensitive-file-permissions-restricted",
-        "title": "Sensitive file permissions restricted",
-        "category": "configuration",
-        "severity": "medium",
-    },
-    10006: {
-        "rule_id": "package-rsh-redone-client-absent",
-        "title": "rsh-redone-client package absent",
-        "category": "software",
-        "severity": "medium",
-    },
-}
+DENYLIST_PACKAGES = ("telnet", "telnetd", "rsh-client", "rsh-redone-client", "rsh-server", "vsftpd", "proftpd", "pure-ftpd")
+
+
+def load_profile_sca_rules(path=PROFILE_PATH):
+    profile = yaml.safe_load(path.read_text(encoding="utf-8"))
+    rules = {}
+    for check in profile.get("checks", []):
+        sca_check_id = check.get("sca_check_id")
+        if sca_check_id is None:
+            continue
+        rules[int(sca_check_id)] = {
+            "rule_id": check["id"],
+            "title": check["title"],
+            "category": check["category"],
+            "severity": check["severity"],
+            "remediation": check["remediation"],
+        }
+    return rules
 
 
 def load_env_file(path):
@@ -211,6 +194,7 @@ def normalize_severity(value):
         "high": "high",
         "medium": "medium",
         "low": "low",
+        "info": "info",
     }
     return mapping.get((value or "").strip().lower(), "medium")
 
@@ -232,7 +216,7 @@ def build_inventory_lookup(client, targets):
 
 
 def fetch_sca_checks(client, agent_id):
-    response = client.get(f"/sca/{agent_id}/checks/{SCA_POLICY_ID}", params={"limit": 50})
+    response = client.get(f"/sca/{agent_id}/checks/{SCA_POLICY_ID}", params={"limit": 100})
     return response.get("data", {}).get("affected_items", []), response
 
 
@@ -246,10 +230,10 @@ def fetch_syscollector_packages(client, agent_id, package_name):
     return response.get("data", {}).get("affected_items", []), response
 
 
-def normalize_sca_findings(host, sca_checks):
+def normalize_sca_findings(host, sca_checks, sca_rules):
     findings = []
     for item in sca_checks:
-        rule_meta = SCA_RULES.get(item.get("id"))
+        rule_meta = sca_rules.get(item.get("id"))
         if not rule_meta:
             continue
         status = normalize_sca_result(item.get("result"))
@@ -267,14 +251,14 @@ def normalize_sca_findings(host, sca_checks):
         findings.append(
             {
                 "host": host,
-                "source": "wazuh-api-sca",
+                "source": "wazuh_sca",
                 "category": rule_meta["category"],
                 "rule_id": rule_meta["rule_id"],
                 "title": rule_meta["title"],
                 "severity": rule_meta["severity"],
                 "status": status,
                 "evidence": evidence or [f"SCA result: {item.get('result', 'unknown')}"],
-                "remediation": item.get("remediation") or "Apply the required baseline setting.",
+                "remediation": item.get("remediation") or rule_meta["remediation"],
             }
         )
     return findings
@@ -373,6 +357,7 @@ def main():
     parser.add_argument("--hosts", default=",".join(DEFAULT_TARGETS))
     args = parser.parse_args()
     targets = parse_hosts(args.hosts)
+    sca_rules = load_profile_sca_rules()
 
     creds = load_env_file(CREDS_PATH)
     required = ("WAZUH_API_URL", "WAZUH_API_USER", "WAZUH_API_PASSWORD")
@@ -410,13 +395,13 @@ def main():
 
         sca_checks, sca_response = fetch_sca_checks(client, agent_id)
         raw_api["sca"][host] = sca_response
-        findings.extend(normalize_sca_findings(host, sca_checks))
+        findings.extend(normalize_sca_findings(host, sca_checks, sca_rules))
 
         os_items, os_response = fetch_syscollector_os(client, agent_id)
         raw_api["syscollector_os"][host] = os_response
 
         raw_api["syscollector_packages"][host] = {}
-        for package_name in ("telnet", "rsh-redone-client"):
+        for package_name in DENYLIST_PACKAGES:
             package_items, package_response = fetch_syscollector_packages(client, agent_id, package_name)
             raw_api["syscollector_packages"][host][package_name] = package_response
 

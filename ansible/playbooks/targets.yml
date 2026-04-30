@@ -5,7 +5,12 @@
   vars_files:
     - ../group_vars/all.yml
   vars:
-    target_baseline_apply_remediation: "{{ target_baseline_state == 'compliant' }}"
+    target_baseline_apply_remediation: true
+  pre_tasks:
+    - name: Load target demo state variables
+      ansible.builtin.include_vars:
+        file: "../host_vars/{{ inventory_hostname }}.yml"
 
   roles:
     - role: target_baseline
+    - role: target_state

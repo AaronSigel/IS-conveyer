@@ -1,0 +1,15 @@
+---
+target_security_state: compliant
+
+ssh_permit_root_login: "no"
+ssh_password_authentication: "no"
+
+firewall_enabled: true
+
+forbidden_packages:
+  - telnet
+  - telnetd
+  - rsh-redone-client
+
+sensitive_file_path: /tmp/demo-sensitive.txt
+sensitive_file_mode: "0640"

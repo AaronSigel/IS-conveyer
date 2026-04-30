@@ -50,14 +50,17 @@ def render_report(findings):
     hosts = sorted(by_host)
 
     host_lines = []
-    table_lines = ["| Хост | Категория | Правило | Статус | Критичность | Доказательства |", "| --- | --- | --- | --- | --- | --- |"]
+    table_lines = [
+        "| Хост | Категория | Правило | Название | Статус | Критичность | Доказательства |",
+        "| --- | --- | --- | --- | --- | --- | --- |",
+    ]
     for host in hosts:
         counts = Counter(item["status"] for item in by_host[host])
         host_lines.append(f"- `{host}`: fail={counts.get('fail', 0)}, pass={counts.get('pass', 0)}")
         for item in by_host[host]:
             evidence = "<br>".join(item["evidence"])
             table_lines.append(
-                f"| {host} | {item['category']} | `{item['rule_id']}` | {item['status'].upper()} | {item['severity']} | {evidence} |"
+                f"| {host} | {item['category']} | `{item['rule_id']}` | {item['title']} | {item['status'].upper()} | {item['severity']} | {evidence} |"
             )
 
     methods = [

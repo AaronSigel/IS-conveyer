@@ -1,0 +1,31 @@
+---
+- name: Set PermitRootLogin in main sshd_config
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: '^#?PermitRootLogin'
+    line: "PermitRootLogin {{ ssh_permit_root_login }}"
+    create: false
+  notify: Restart ssh
+
+- name: Set PasswordAuthentication in main sshd_config
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: '^#?PasswordAuthentication'
+    line: "PasswordAuthentication {{ ssh_password_authentication }}"
+    create: false
+  notify: Restart ssh
+
+- name: Ensure target-state SSH drop-in is effective
+  ansible.builtin.copy:
+    dest: "{{ target_baseline_ssh_override_path | default('/etc/ssh/sshd_config.d/99-ib-host-audit-poc.conf') }}"
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      # Managed by target_state role
+      PermitRootLogin {{ ssh_permit_root_login }}
+      PasswordAuthentication {{ ssh_password_authentication }}
+      PermitEmptyPasswords no
+      X11Forwarding no
+      MaxAuthTries 4
+  notify: Restart ssh

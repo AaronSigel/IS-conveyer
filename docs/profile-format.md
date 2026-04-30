@@ -13,11 +13,50 @@
 
 - `id`: стабильный идентификатор правила;
 - `title`: короткое название;
+- `category`: категория finding, сейчас используются `configuration` и `software`;
+- `severity`: уровень критичности, допустимы `critical`, `high`, `medium`, `low`, `info`;
+- `rationale`: почему контроль важен;
+- `remediation`: направление исправления;
+- `sca_check_id`: числовой id соответствующего Wazuh SCA check.
+
+Профиль `host-baseline-v1` покрывает:
+
+- SSH hardening: root login, password authentication, empty passwords, X11 forwarding, MaxAuthTries;
+- firewall: активный UFW и default deny incoming;
+- file permissions: `/etc/shadow` и `/etc/ssh/sshd_config`;
+- denylist packages: telnet, rsh, FTP-серверы;
+- audit/logging: auditd и rsyslog;
+- time synchronization: timedatectl, chrony или systemd-timesyncd.
+
+## Связь С Wazuh SCA
+
+Каждое правило профиля имеет пару в SCA policy `host-baseline-v1-sca.yml`. В `compliance.custom` SCA check указывается `id` правила из профиля, а `sca_check_id` профиля совпадает с `id` SCA check.
+
+Перед запуском стенда профиль можно проверить локально:
+
+```bash
+python scripts/validate-profile.py profiles/host-baseline-v1.yml
+```
+
+Smoke-check проверяет:
+
+- YAML читается;
+- `id` правил уникальны;
+- `sca_check_id` уникальны;
+- `category` и `severity` входят в допустимые enum;
+- обязательные поля заполнены.
+
+## Наследие MVP
+
+Ранние версии профиля также использовали поля:
+
 - `description`: смысл проверки;
 - `target`: объект контроля;
 - `expected`: ожидаемое состояние;
 - `severity`: уровень критичности;
 - `remediation`: направление исправления.
+
+Для текущего Wazuh-only pipeline authoritative mapping берётся из `id`, `category`, `severity`, `remediation` и `sca_check_id`.
 
 ## Правила расширения
 

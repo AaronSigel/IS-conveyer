@@ -2,57 +2,152 @@ profile: host-baseline-v1
 metadata:
   version: 1
   owner: infra-security
-  description: Minimal host security baseline for the PoC stand.
+  description: Extended Wazuh SCA host security baseline for Ubuntu 24.04.
 
 checks:
-  - id: ssh-permit-root-login-disabled
-    title: PermitRootLogin disabled
-    description: Root login over SSH must be disabled.
-    target: sshd.PermitRootLogin
-    expected: "no"
+  - id: SSH_ROOT_LOGIN_DISABLED
+    title: Запрет входа root по SSH
+    category: configuration
     severity: high
-    remediation: Set `PermitRootLogin no` in sshd configuration.
+    rationale: Прямой вход root повышает риск компрометации привилегированной учётной записи.
+    remediation: Set `PermitRootLogin no` in sshd configuration and restart SSH.
+    sca_check_id: 10001
 
-  - id: ssh-password-authentication-disabled
-    title: PasswordAuthentication disabled
-    description: Password authentication over SSH must be disabled.
-    target: sshd.PasswordAuthentication
-    expected: "no"
+  - id: SSH_PASSWORD_AUTH_DISABLED
+    title: Запрет парольной аутентификации по SSH
+    category: configuration
     severity: high
-    remediation: Set `PasswordAuthentication no` in sshd configuration.
+    rationale: Парольная аутентификация подвержена перебору и должна быть заменена ключами.
+    remediation: Set `PasswordAuthentication no` in sshd configuration and restart SSH.
+    sca_check_id: 10002
 
-  - id: package-telnet-absent
-    title: Telnet package absent
-    description: Legacy telnet client/server packages must not be installed.
-    target: packages
-    expected:
-      absent:
-        - telnet
-        - telnetd
+  - id: SSH_EMPTY_PASSWORDS_DISABLED
+    title: Запрет входа пользователей с пустым паролем
+    category: configuration
+    severity: high
+    rationale: Пустые пароли позволяют получить доступ без секрета аутентификации.
+    remediation: Set `PermitEmptyPasswords no` in sshd configuration and restart SSH.
+    sca_check_id: 10003
+
+  - id: SSH_X11_FORWARDING_DISABLED
+    title: Запрет X11 forwarding
+    category: configuration
     severity: medium
-    remediation: Remove telnet-related packages.
+    rationale: X11 forwarding расширяет поверхность атаки SSH-сессий.
+    remediation: Set `X11Forwarding no` in sshd configuration and restart SSH.
+    sca_check_id: 10004
 
-  - id: firewall-enabled
-    title: Firewall enabled
-    description: Host firewall must be enabled and active.
-    target: firewall
-    expected:
-      enabled: true
-    severity: high
-    remediation: Enable and configure the local firewall.
-
-  - id: sensitive-file-permissions-restricted
-    title: Sensitive file permissions restricted
-    description: Sensitive files must not be world-readable.
-    target: file_permissions
-    expected:
-      path: /etc/ib-host-audit-poc/demo-sensitive.conf
-      mode_max: "0640"
+  - id: SSH_MAX_AUTH_TRIES_LIMITED
+    title: Ограничение количества попыток входа по SSH
+    category: configuration
     severity: medium
-    remediation: Restrict mode and ownership on sensitive files.
+    rationale: Ограничение числа попыток снижает эффективность перебора учётных данных.
+    remediation: Set `MaxAuthTries 4` in sshd configuration and restart SSH.
+    sca_check_id: 10005
+
+  - id: FIREWALL_UFW_ENABLED
+    title: Включён UFW firewall
+    category: configuration
+    severity: high
+    rationale: Локальный firewall ограничивает сетевую поверхность хоста.
+    remediation: Install UFW if needed and run `ufw --force enable`.
+    sca_check_id: 10010
+
+  - id: FIREWALL_DEFAULT_DENY_INCOMING
+    title: Политика входящих соединений deny by default
+    category: configuration
+    severity: high
+    rationale: Default deny для входящих соединений предотвращает случайную публикацию сервисов.
+    remediation: Run `ufw default deny incoming` and allow only required services.
+    sca_check_id: 10011
+
+  - id: SHADOW_FILE_PERMISSIONS_SECURE
+    title: Безопасные права на /etc/shadow
+    category: configuration
+    severity: high
+    rationale: Файл shadow содержит хэши паролей и не должен читаться обычными пользователями.
+    remediation: Set `/etc/shadow` mode to `0640` or `0600` and keep ownership restricted.
+    sca_check_id: 10020
+
+  - id: SSHD_CONFIG_PERMISSIONS_SECURE
+    title: Безопасные права на /etc/ssh/sshd_config
+    category: configuration
+    severity: medium
+    rationale: World-writable SSH configuration allows unauthorized daemon reconfiguration.
+    remediation: Remove world-write permission from `/etc/ssh/sshd_config`.
+    sca_check_id: 10021
+
+  - id: DEMO_SENSITIVE_FILE_PERMISSIONS_SECURE
+    title: Безопасные права на demo sensitive file
+    category: configuration
+    severity: medium
+    rationale: World-accessible sensitive files can expose secrets or allow unauthorized modification.
+    remediation: Set `/tmp/demo-sensitive.txt` permissions to `0640` and keep ownership restricted.
+    sca_check_id: 10022
+
+  - id: TELNET_PACKAGE_ABSENT
+    title: Telnet не должен быть установлен
+    category: software
+    severity: medium
+    rationale: Telnet передаёт данные без шифрования и не должен использоваться на хосте.
+    remediation: Remove `telnet` and `telnetd` packages.
+    sca_check_id: 10030
+
+  - id: RSH_PACKAGE_ABSENT
+    title: RSH не должен быть установлен
+    category: software
+    severity: medium
+    rationale: RSH является устаревшим небезопасным протоколом удалённого доступа.
+    remediation: Remove `rsh-client`, `rsh-redone-client`, and `rsh-server` packages.
+    sca_check_id: 10031
+
+  - id: FTP_SERVER_ABSENT
+    title: FTP-сервер не должен быть установлен
+    category: software
+    severity: medium
+    rationale: FTP-серверы без дополнительной защиты повышают риск утечки учётных данных и данных.
+    remediation: Remove `vsftpd`, `proftpd`, and `pure-ftpd` packages unless explicitly required.
+    sca_check_id: 10032
+
+  - id: AUDITD_INSTALLED
+    title: auditd установлен
+    category: configuration
+    severity: medium
+    rationale: auditd обеспечивает сбор событий аудита безопасности на Linux-хосте.
+    remediation: Install the `auditd` package.
+    sca_check_id: 10040
+
+  - id: AUDITD_SERVICE_ENABLED
+    title: auditd включён
+    category: configuration
+    severity: medium
+    rationale: Установленный auditd должен запускаться автоматически для непрерывного аудита.
+    remediation: Enable and start the `auditd` service.
+    sca_check_id: 10041
+
+  - id: RSYSLOG_SERVICE_ACTIVE
+    title: rsyslog активен
+    category: configuration
+    severity: low
+    rationale: Активный системный журнал нужен для расследования событий и подтверждения состояния хоста.
+    remediation: Install, enable, and start the `rsyslog` service.
+    sca_check_id: 10042
+
+  - id: TIME_SYNC_ENABLED
+    title: Синхронизация времени включена
+    category: configuration
+    severity: medium
+    rationale: Корректное время необходимо для сопоставления событий безопасности и аудита.
+    remediation: Enable systemd-timesyncd or chrony and verify NTP synchronization.
+    sca_check_id: 10050
 
 denylist:
   packages:
     - telnet
     - telnetd
+    - rsh-client
     - rsh-redone-client
+    - rsh-server
+    - vsftpd
+    - proftpd
+    - pure-ftpd

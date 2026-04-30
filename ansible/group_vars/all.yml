@@ -36,7 +36,13 @@ target_baseline_drift_packages:
     - rsh-redone-client
 target_baseline_forbidden_packages:
   - telnet
+  - telnetd
+  - rsh-client
   - rsh-redone-client
+  - rsh-server
+  - vsftpd
+  - proftpd
+  - pure-ftpd
 target_baseline_sensitive_mode_drift:
   target1: "0644"
   target2: "0666"

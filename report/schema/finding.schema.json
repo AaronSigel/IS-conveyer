@@ -32,7 +32,7 @@
     },
     "severity": {
       "type": "string",
-      "enum": ["low", "medium", "high", "critical"]
+      "enum": ["info", "low", "medium", "high", "critical"]
     },
     "status": {
       "type": "string",
