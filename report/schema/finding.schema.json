@@ -46,6 +46,103 @@
     },
     "remediation": {
       "type": "string"
+    },
+    "finding_type": {
+      "type": "string",
+      "enum": [
+        "software_vulnerability",
+        "configuration_noncompliance",
+        "service_misconfiguration",
+        "file_permission_issue",
+        "insecure_package"
+      ]
+    },
+    "vulnerability_id": {
+      "type": ["string", "null"]
+    },
+    "external_ids": {
+      "type": "object",
+      "properties": {
+        "cve": {
+          "type": ["string", "null"]
+        },
+        "cwe": {
+          "type": ["string", "null"]
+        },
+        "bdu": {
+          "type": ["string", "null"]
+        }
+      },
+      "additionalProperties": true
+    },
+    "cvss": {
+      "type": "object",
+      "properties": {
+        "base_score": {
+          "type": ["number", "null"]
+        },
+        "vector": {
+          "type": ["string", "null"]
+        }
+      },
+      "additionalProperties": true
+    },
+    "affected_component": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": ["string", "null"]
+        },
+        "version": {
+          "type": ["string", "null"]
+        },
+        "package": {
+          "type": ["string", "null"]
+        },
+        "service": {
+          "type": ["string", "null"]
+        },
+        "port": {
+          "type": ["integer", "null"]
+        },
+        "protocol": {
+          "type": ["string", "null"]
+        }
+      },
+      "additionalProperties": true
+    },
+    "vulnerability_class": {
+      "type": ["string", "null"]
+    },
+    "weakness_id": {
+      "type": ["string", "null"]
+    },
+    "weakness_type": {
+      "type": ["string", "null"]
+    },
+    "location": {
+      "type": ["string", "null"]
+    },
+    "impact": {
+      "type": ["string", "null"]
+    },
+    "detected_at": {
+      "type": ["string", "null"]
+    },
+    "description": {
+      "type": ["string", "null"]
+    },
+    "os_platform": {
+      "type": ["string", "null"]
+    },
+    "detection_method": {
+      "type": ["string", "null"]
+    },
+    "cve": {
+      "type": ["string", "null"]
+    },
+    "sca_check_id": {
+      "type": ["integer", "string", "null"]
     }
   }
 }

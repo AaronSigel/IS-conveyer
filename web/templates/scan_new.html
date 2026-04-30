@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}Новая проверка{% endblock %}
+{% block content %}
+<section class="panel narrow">
+  <h1>Новая проверка</h1>
+  {% if error %}<div class="notice error">{{ error }}</div>{% endif %}
+  <form method="post" action="/scans" class="form-grid">
+    <fieldset>
+      <legend>Хосты</legend>
+      {% for host in hosts %}
+      <label class="check"><input type="checkbox" name="hosts" value="{{ host }}" checked> {{ host }}</label>
+      {% endfor %}
+    </fieldset>
+    <label>Профиль
+      <input value="{{ profile_id }}" disabled>
+    </label>
+    <label class="check"><input type="checkbox" name="create_default_export" checked> создать default export</label>
+    <button class="button primary" type="submit">Запустить scan_and_report</button>
+  </form>
+</section>
+{% endblock %}

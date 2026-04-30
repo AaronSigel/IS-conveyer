@@ -7,6 +7,7 @@ import yaml
 
 
 REQUIRED_FIELDS = ("id", "title", "category", "severity", "rationale", "remediation", "sca_check_id")
+VULNERABILITY_REQUIRED_FIELDS = ("id", "cve", "title", "severity", "remediation")
 ALLOWED_CATEGORIES = {"configuration", "software"}
 ALLOWED_SEVERITIES = {"critical", "high", "medium", "low", "info"}
 
@@ -53,10 +54,49 @@ def validate_profile(path):
         if severity and severity not in ALLOWED_SEVERITIES:
             errors.append(f"check #{index}: invalid severity {severity}")
 
+    vulnerabilities = data.get("vulnerabilities", [])
+    if vulnerabilities is None:
+        vulnerabilities = []
+    if not isinstance(vulnerabilities, list):
+        errors.append("vulnerabilities: must be a list")
+    else:
+        vulnerability_ids = set()
+        vulnerability_cves = set()
+        for index, vulnerability in enumerate(vulnerabilities, start=1):
+            if not isinstance(vulnerability, dict):
+                errors.append(f"vulnerability #{index}: must be a mapping")
+                continue
+
+            for field in VULNERABILITY_REQUIRED_FIELDS:
+                if vulnerability.get(field) in (None, ""):
+                    errors.append(f"vulnerability #{index}: missing required field {field}")
+
+            rule_id = vulnerability.get("id")
+            if rule_id in vulnerability_ids:
+                errors.append(f"vulnerability #{index}: duplicate id {rule_id}")
+            elif rule_id:
+                vulnerability_ids.add(rule_id)
+
+            cve = str(vulnerability.get("cve")).upper() if vulnerability.get("cve") else None
+            if cve in vulnerability_cves:
+                errors.append(f"vulnerability #{index}: duplicate cve {vulnerability.get('cve')}")
+            elif cve:
+                vulnerability_cves.add(cve)
+
+            severity = vulnerability.get("severity")
+            if severity and severity not in ALLOWED_SEVERITIES:
+                errors.append(f"vulnerability #{index}: invalid severity {severity}")
+
+            packages = vulnerability.get("packages", [])
+            if packages is None:
+                packages = []
+            if not isinstance(packages, list) or not all(isinstance(package, str) and package for package in packages):
+                errors.append(f"vulnerability #{index}: packages must be a list of non-empty strings")
+
     if errors:
         raise ValueError("\n".join(errors))
 
-    return len(checks)
+    return len(checks), len(vulnerabilities) if isinstance(vulnerabilities, list) else 0
 
 
 def main():
@@ -65,8 +105,8 @@ def main():
     args = parser.parse_args()
 
     path = pathlib.Path(args.profile)
-    count = validate_profile(path)
-    print(f"Profile {path} is valid: {count} checks")
+    check_count, vulnerability_count = validate_profile(path)
+    print(f"Profile {path} is valid: {check_count} checks, {vulnerability_count} vulnerabilities")
 
 
 if __name__ == "__main__":

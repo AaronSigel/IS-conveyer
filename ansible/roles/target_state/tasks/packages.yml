@@ -11,4 +11,5 @@
     name: "{{ forbidden_packages }}"
     state: present
     update_cache: true
+    cache_valid_time: 3600
   when: target_security_state == "vulnerable"

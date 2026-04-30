@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}Экспорт {{ export.id }}{% endblock %}
+{% block content %}
+<section class="page-head">
+  <div>
+    <h1>{{ export.title }}</h1>
+    <p>{{ export.id }} · {{ export.created_at }}</p>
+  </div>
+  <div class="actions">
+    <a class="button primary" href="/reports/{{ run_id }}/exports/{{ export.id }}/html">HTML</a>
+    <a class="button" href="/reports/{{ run_id }}/exports/{{ export.id }}/pdf">PDF</a>
+  </div>
+</section>
+<section class="metrics">
+  <div><b>Before</b><span>{{ export.result_summary.total_findings_before_filter }}</span></div>
+  <div><b>After</b><span>{{ export.result_summary.total_findings_after_filter }}</span></div>
+  <div><b>Fail</b><span>{{ export.result_summary.fail }}</span></div>
+  <div><b>High</b><span>{{ export.result_summary.high }}</span></div>
+</section>
+<section class="panel">
+  <h2>Параметры</h2>
+  <pre class="preview">{{ export.filters }}</pre>
+</section>
+{% endblock %}

@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}Отчёты{% endblock %}
+{% block content %}
+<section class="page-head">
+  <div>
+    <h1>Сохранённые отчёты</h1>
+    <p>Immutable snapshots из artifacts/runs.</p>
+  </div>
+</section>
+{% include "runs_table.html" %}
+{% endblock %}

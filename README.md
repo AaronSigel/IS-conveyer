@@ -127,7 +127,7 @@ python scripts/validate-profile.py profiles/host-baseline-v1.yml
 
 - выгружает unified findings;
 - сохраняет raw vulnerability snapshot из `Wazuh indexer`;
-- формирует итоговый markdown-отчёт.
+- формирует итоговый технический markdown-отчёт с паспортами уязвимостей и несоответствий.
 
 Наблюдение за состоянием стенда во время `provision` или `run-host-scan`:
 
@@ -165,7 +165,68 @@ python scripts/validate-profile.py profiles/host-baseline-v1.yml
 - `artifacts/unified-findings.json`: нормализованные findings;
 - `artifacts/raw-wazuh-alerts.json`: raw Wazuh API snapshot;
 - `artifacts/raw-wazuh-vulnerabilities.json`: raw Wazuh indexer vulnerability snapshot;
-- `artifacts/draft-report.md`: markdown-отчёт.
+- `artifacts/draft-report.md`: технический markdown-отчёт.
+
+## Технический отчёт
+
+Генератор отчёта формирует компактный технический отчёт по результатам проверки защищённости хостов. Основной результат отчёта - раздел `5 ПАСПОРТА ВЫЯВЛЕННЫХ УЯЗВИМОСТЕЙ И НЕСООТВЕТСТВИЙ`; каждый включённый finding представлен отдельным паспортом с описанием, доказательством, последствиями и возможными мерами устранения.
+
+Отчёт не содержит титульный лист, реферат, содержание, приложения, сводную таблицу findings и отдельный remediation plan. Сводка считается только по findings, прошедшим фильтрацию.
+
+Пример генерации:
+
+```bash
+python scripts/generate-report.py \
+  --findings artifacts/unified-findings.json \
+  --profile profiles/host-baseline-v1.yml \
+  --metadata config/report-metadata.yml \
+  --output report/technical-report.md \
+  --status failed \
+  --severity high,critical
+```
+
+Поддерживаемые фильтры:
+
+- `--status`
+- `--severity`
+- `--category`
+- `--source`
+- `--host`
+- `--rule-id`
+- `--finding-type`
+- `--cvss-min`
+- `--cvss-max`
+
+Подробности формата отчёта и mapping `finding -> passport` описаны в [docs/report-format.md](/home/funder/IS-project/docs/report-format.md).
+
+## Web UI
+
+### Предусловия
+
+- VM уже подняты.
+- Wazuh manager доступен.
+- Wazuh agents активны.
+- Существующий scan pipeline работает из CLI.
+
+### Запуск
+
+```bash
+./scripts/run-ui.sh
+```
+
+### Адрес
+
+```text
+http://127.0.0.1:8080
+```
+
+### Возможности
+
+- запуск проверки;
+- просмотр логов;
+- история запусков;
+- фильтрация отчёта;
+- экспорт HTML/PDF.
 
 ## Удаление стенда
 

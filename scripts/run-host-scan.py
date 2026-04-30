@@ -121,7 +121,8 @@ def build_runtime_inventory():
         "ansible_host=127.0.0.1",
         f"ansible_host={windows_host_ip}",
     )
-    inventory_text += f"\nansible_ssh_private_key_file={os.environ.get('VAGRANT_INSECURE_PRIVATE_KEY', '')}\n"
+    vagrant_key = os.environ.get("VAGRANT_INSECURE_PRIVATE_KEY") or "~/.vagrant.d/insecure_private_key"
+    inventory_text += f"\nansible_ssh_private_key_file={vagrant_key}\n"
     runtime_inventory = ARTIFACTS_DIR / "runtime-hosts.ini"
     runtime_inventory.write_text(inventory_text, encoding="utf-8")
     return runtime_inventory

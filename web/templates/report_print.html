@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <title>{{ export.title }}</title>
+  <style>
+    body { font-family: system-ui, -apple-system, Segoe UI, sans-serif; color:#17202a; }
+    h1, h2 { margin-bottom: 8px; }
+    table { width:100%; border-collapse:collapse; font-size:10px; }
+    th, td { border:1px solid #d7dde5; padding:5px; text-align:left; vertical-align:top; word-break:break-word; }
+    th { background:#eef2f7; }
+    pre { white-space:pre-wrap; background:#f6f7f9; padding:10px; }
+    .metrics { display:grid; grid-template-columns:repeat(4, 1fr); gap:10px; margin:16px 0; }
+    .metrics div { border:1px solid #d7dde5; padding:10px; }
+    .metrics b { display:block; }
+  </style>
+</head>
+<body class="print">
+  <h1>{{ export.title }}</h1>
+  <section>
+    <h2>Метаданные запуска</h2>
+    <p>Run ID: {{ metadata.id }}</p>
+    <p>Статус: {{ metadata.status }}</p>
+    <p>Хосты: {{ ", ".join(metadata.hosts or []) }}</p>
+    <p>Профиль: {{ metadata.profile_id }}</p>
+    <p>Дата проверки: {{ metadata.started_at }}</p>
+  </section>
+  <section>
+    <h2>Параметры экспорта</h2>
+    <p>ID: {{ export.id }}</p>
+    <p>Создан: {{ export.created_at }}</p>
+    <pre>{{ export.filters }}</pre>
+  </section>
+  <section class="metrics">
+    <div><b>До фильтрации</b><span>{{ before_summary.total }}</span></div>
+    <div><b>После фильтрации</b><span>{{ export.result_summary.total_findings_after_filter }}</span></div>
+    <div><b>Fail</b><span>{{ export.result_summary.fail }}</span></div>
+    <div><b>High</b><span>{{ export.result_summary.high }}</span></div>
+  </section>
+  <section>
+    <h2>Findings</h2>
+    <table>
+      <thead><tr><th>host</th><th>source</th><th>category</th><th>rule_id</th><th>title</th><th>status</th><th>severity</th><th>cvss</th><th>cve</th><th>package</th><th>evidence</th><th>remediation</th></tr></thead>
+      <tbody>
+      {% for item in findings %}
+      <tr>
+        <td>{{ item.host }}</td><td>{{ item.source }}</td><td>{{ item.category }}</td><td>{{ item.rule_id }}</td><td>{{ item.title }}</td><td>{{ item.status }}</td><td>{{ item.severity }}</td><td>{{ item.cvss_base_score if item.cvss_base_score is not none else "" }}</td><td>{{ item.cve or "" }}</td><td>{{ item.package or "" }}</td>
+        <td>{% for line in item.evidence %}<div>{{ line }}</div>{% endfor %}</td>
+        <td>{{ item.remediation }}</td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </section>
+  <section>
+    <h2>Рекомендации/remediation</h2>
+    <ul>
+    {% for item in findings if item.status == "fail" %}
+      <li>{{ item.rule_id }}: {{ item.remediation }}</li>
+    {% endfor %}
+    </ul>
+  </section>
+  <section>
+    <h2>Приложение: источники данных</h2>
+    <p>SCA configuration checks берутся из Wazuh SCA/API snapshot. Package vulnerabilities берутся из Wazuh indexer vulnerability snapshot. Фильтры применены только к сохранённому unified-findings.json.</p>
+  </section>
+</body>
+</html>

@@ -1,6 +1,6 @@
 ---
 target_baseline_ssh_override_path: /etc/ssh/sshd_config.d/99-ib-host-audit-poc.conf
-target_baseline_sensitive_file: /etc/ib-host-audit-poc/demo-sensitive.conf
+target_baseline_sensitive_file: /tmp/demo-sensitive.txt
 target_baseline_firewall_state:
   drifting: false
   compliant: true

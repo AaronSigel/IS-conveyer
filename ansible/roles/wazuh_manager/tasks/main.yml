@@ -232,6 +232,59 @@
   ansible.builtin.command:
     cmd: apt-get clean
 
+- name: Ensure Wazuh indexer log directory exists before startup
+  ansible.builtin.file:
+    path: /var/log/wazuh-indexer
+    state: directory
+    owner: wazuh-indexer
+    group: wazuh-indexer
+    mode: "0750"
+  when: not wazuh_manager_lightweight_mode
+
+- name: Ensure Wazuh indexer certificates directory exists
+  ansible.builtin.file:
+    path: /etc/wazuh-indexer/certs
+    state: directory
+    owner: wazuh-indexer
+    group: wazuh-indexer
+    mode: "0750"
+  when: not wazuh_manager_lightweight_mode
+
+- name: Extract Wazuh indexer certificates from the generated tarball
+  ansible.builtin.shell: |
+    set -euo pipefail
+    tmp_dir="$(mktemp -d)"
+    trap 'rm -rf "${tmp_dir}"' EXIT
+    tar -axf "{{ wazuh_password_archive_path }}" -C "${tmp_dir}" \
+      wazuh-install-files/root-ca.pem \
+      wazuh-install-files/admin.pem \
+      wazuh-install-files/admin-key.pem \
+      wazuh-install-files/wazuh-indexer.pem \
+      wazuh-install-files/wazuh-indexer-key.pem
+    install -o wazuh-indexer -g wazuh-indexer -m 0400 "${tmp_dir}/wazuh-install-files/root-ca.pem" /etc/wazuh-indexer/certs/root-ca.pem
+    install -o wazuh-indexer -g wazuh-indexer -m 0400 "${tmp_dir}/wazuh-install-files/admin.pem" /etc/wazuh-indexer/certs/admin.pem
+    install -o wazuh-indexer -g wazuh-indexer -m 0400 "${tmp_dir}/wazuh-install-files/admin-key.pem" /etc/wazuh-indexer/certs/admin-key.pem
+    install -o wazuh-indexer -g wazuh-indexer -m 0400 "${tmp_dir}/wazuh-install-files/wazuh-indexer.pem" /etc/wazuh-indexer/certs/indexer.pem
+    install -o wazuh-indexer -g wazuh-indexer -m 0400 "${tmp_dir}/wazuh-install-files/wazuh-indexer-key.pem" /etc/wazuh-indexer/certs/indexer-key.pem
+  args:
+    executable: /bin/bash
+  when: not wazuh_manager_lightweight_mode
+
+- name: Ensure Wazuh indexer is running before security checks
+  ansible.builtin.systemd:
+    name: wazuh-indexer
+    state: started
+    enabled: true
+    daemon_reload: true
+  when: not wazuh_manager_lightweight_mode
+
+- name: Wait for Wazuh indexer API port
+  ansible.builtin.wait_for:
+    host: 127.0.0.1
+    port: 9200
+    timeout: 300
+  when: not wazuh_manager_lightweight_mode
+
 - name: Initialize Wazuh indexer security when required
   ansible.builtin.shell: |
     set -euo pipefail

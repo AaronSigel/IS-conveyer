@@ -8,7 +8,6 @@
       - python3-apt
       - ca-certificates
     state: present
-    update_cache: true
 
 - name: Ensure project root exists on target
   ansible.builtin.file:

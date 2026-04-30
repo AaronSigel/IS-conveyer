@@ -5,6 +5,7 @@
 - `profile`: идентификатор и версия профиля;
 - `metadata`: назначение, владелец и комментарии;
 - `checks`: список проверок;
+- `vulnerabilities`: список CVE, которые нужно учитывать из Wazuh indexer;
 - `denylist` или `allowlist`: дополнительные ограничения по пакетам и сервисам.
 
 ## Структура проверки
@@ -28,6 +29,34 @@
 - audit/logging: auditd и rsyslog;
 - time synchronization: timedatectl, chrony или systemd-timesyncd.
 
+## Структура Vulnerability-Проверки
+
+Wazuh indexer хранит все найденные CVE в индексах `wazuh-states-vulnerabilities*`, но экспортёр учитывает только CVE из раздела `vulnerabilities`.
+
+Каждая vulnerability-проверка содержит:
+
+- `id`: стабильный идентификатор правила;
+- `cve`: CVE ID, например `CVE-2024-6387`;
+- `title`: короткое название finding;
+- `severity`: уровень критичности, допустимы `critical`, `high`, `medium`, `low`, `info`;
+- `remediation`: направление исправления;
+- `packages`: необязательный список пакетов. Если список задан, finding создаётся только для совпадающих `package.name`.
+
+Пример:
+
+```yaml
+vulnerabilities:
+  - id: VULN_CVE_2024_6387_OPENSSH
+    cve: CVE-2024-6387
+    title: OpenSSH regreSSHion CVE-2024-6387
+    severity: critical
+    remediation: Update OpenSSH packages to a fixed vendor version.
+    packages:
+      - openssh-server
+```
+
+Если `vulnerabilities: []`, экспорт vulnerability snapshot пропускается и findings по всей базе Wazuh не создаются.
+
 ## Связь С Wazuh SCA
 
 Каждое правило профиля имеет пару в SCA policy `host-baseline-v1-sca.yml`. В `compliance.custom` SCA check указывается `id` правила из профиля, а `sca_check_id` профиля совпадает с `id` SCA check.
@@ -43,6 +72,7 @@ Smoke-check проверяет:
 - YAML читается;
 - `id` правил уникальны;
 - `sca_check_id` уникальны;
+- `vulnerabilities[].id` и `vulnerabilities[].cve` уникальны;
 - `category` и `severity` входят в допустимые enum;
 - обязательные поля заполнены.
 

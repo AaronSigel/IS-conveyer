@@ -32,6 +32,7 @@
       - rsyslog
     state: present
     update_cache: true
+    cache_valid_time: 3600
 
 - name: Install audit and time sync packages in compliant mode
   ansible.builtin.apt:

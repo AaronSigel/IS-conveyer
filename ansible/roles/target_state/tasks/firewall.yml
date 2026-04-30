@@ -4,6 +4,7 @@
     name: ufw
     state: present
     update_cache: true
+    cache_valid_time: 3600
 
 - name: Allow SSH through UFW before enabling the firewall
   ansible.builtin.command:

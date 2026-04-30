@@ -1,16 +1,74 @@
 [
   {
     "host": "target1",
-    "source": "baseline-profile",
-    "category": "ssh",
-    "rule_id": "ssh-password-authentication-disabled",
-    "title": "PasswordAuthentication disabled",
+    "source": "wazuh_sca",
+    "category": "configuration",
+    "rule_id": "SSH_ROOT_LOGIN_DISABLED",
+    "title": "Запрет входа root по SSH",
     "severity": "high",
     "status": "fail",
     "evidence": [
-      "Demo config indicates password authentication is enabled.",
-      "Target host contains /etc/ib-host-audit-poc/demo-app.conf"
+      "Command: sshd -T",
+      "Rules: c:sshd -T -> r:^permitrootlogin no$"
     ],
-    "remediation": "Set PasswordAuthentication to no and remove the demo override."
+    "remediation": "Set `PermitRootLogin no` in sshd configuration and restart SSH.",
+    "sca_check_id": 10001
+  },
+  {
+    "host": "target1",
+    "source": "wazuh_sca",
+    "category": "configuration",
+    "rule_id": "SSH_X11_FORWARDING_DISABLED",
+    "title": "Запрет X11 forwarding",
+    "severity": "medium",
+    "status": "fail",
+    "evidence": [
+      "Command: sshd -T",
+      "Rules: c:sshd -T -> r:^x11forwarding no$"
+    ],
+    "remediation": "Set `X11Forwarding no` in sshd configuration and restart SSH.",
+    "sca_check_id": 10004
+  },
+  {
+    "host": "target2",
+    "source": "wazuh_sca",
+    "category": "configuration",
+    "rule_id": "AUDITD_INSTALLED",
+    "title": "auditd установлен",
+    "severity": "medium",
+    "status": "pass",
+    "evidence": [
+      "Package auditd is installed"
+    ],
+    "remediation": "Install the `auditd` package.",
+    "sca_check_id": 10040
+  },
+  {
+    "host": "target1",
+    "source": "wazuh_vulnerability",
+    "category": "vulnerability",
+    "rule_id": "VULN_SUDO_CVE_2025_32463",
+    "title": "Sudo chroot option local privilege escalation",
+    "severity": "critical",
+    "status": "fail",
+    "evidence": [
+      "Package: sudo 1.9.15p5-3ubuntu5",
+      "CVE: CVE-2025-32463",
+      "CVSS base: 9.3"
+    ],
+    "remediation": "Update sudo to the fixed Ubuntu 24.04 package version or later.",
+    "finding_type": "software_vulnerability",
+    "external_ids": {
+      "cve": "CVE-2025-32463"
+    },
+    "cvss": {
+      "base_score": 9.3,
+      "vector": "CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:C/C:H/I:H/A:H"
+    },
+    "affected_component": {
+      "package": "sudo",
+      "version": "1.9.15p5-3ubuntu5"
+    },
+    "detected_at": "2026-04-30T20:00:00+03:00"
   }
 ]

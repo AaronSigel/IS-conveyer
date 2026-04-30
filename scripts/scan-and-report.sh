@@ -5,11 +5,12 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 HOSTS="target1,target2"
 OUTPUT_PREFIX=""
+OUTPUT_DIR=""
 EXTRA_SCAN_ARGS=()
 
 usage() {
   cat <<'EOF'
-Usage: ./scripts/scan-and-report.sh [--hosts target1,target2] [--output-prefix prefix] [scan args]
+Usage: ./scripts/scan-and-report.sh [--hosts target1,target2] [--output-prefix prefix] [--output-dir dir] [scan args]
 
 Runs the scan pipeline only:
   1. trigger host scan
@@ -31,6 +32,10 @@ while (($# > 0)); do
       EXTRA_SCAN_ARGS+=("$1" "$2")
       shift 2
       ;;
+    --output-dir)
+      OUTPUT_DIR="$2"
+      shift 2
+      ;;
     -h|--help)
       usage
       exit 0
@@ -45,4 +50,7 @@ done
 cd "${PROJECT_ROOT}"
 
 ./scripts/run-host-scan.py "${EXTRA_SCAN_ARGS[@]}"
-bash ./scripts/collect-report.sh --hosts "${HOSTS}" ${OUTPUT_PREFIX:+--output-prefix "${OUTPUT_PREFIX}"}
+bash ./scripts/collect-report.sh \
+  --hosts "${HOSTS}" \
+  ${OUTPUT_PREFIX:+--output-prefix "${OUTPUT_PREFIX}"} \
+  ${OUTPUT_DIR:+--output-dir "${OUTPUT_DIR}"}

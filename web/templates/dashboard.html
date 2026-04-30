@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+{% block content %}
+<section class="page-head">
+  <div>
+    <h1>Запуски проверок</h1>
+    <p>История scan_and_report по уже поднятым VM.</p>
+  </div>
+  <a class="button primary" href="/scans/new">Запустить проверку</a>
+</section>
+{% if active_run_id %}
+<div class="notice">Проверка уже выполняется: <a href="/scans/{{ active_run_id }}">{{ active_run_id }}</a></div>
+{% endif %}
+{% include "runs_table.html" %}
+{% endblock %}

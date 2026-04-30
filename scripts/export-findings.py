@@ -30,21 +30,35 @@ DEFAULT_VAGRANT_PRIVATE_KEY = os.environ.get("VAGRANT_INSECURE_PRIVATE_KEY", "~/
 DENYLIST_PACKAGES = ("telnet", "telnetd", "rsh-client", "rsh-redone-client", "rsh-server", "vsftpd", "proftpd", "pure-ftpd")
 
 
-def load_profile_sca_rules(path=PROFILE_PATH):
+def load_profile(path=PROFILE_PATH):
     profile = yaml.safe_load(path.read_text(encoding="utf-8"))
-    rules = {}
+    sca_rules = {}
     for check in profile.get("checks", []):
         sca_check_id = check.get("sca_check_id")
         if sca_check_id is None:
             continue
-        rules[int(sca_check_id)] = {
+        sca_rules[int(sca_check_id)] = {
             "rule_id": check["id"],
             "title": check["title"],
             "category": check["category"],
             "severity": check["severity"],
             "remediation": check["remediation"],
         }
-    return rules
+
+    vulnerability_rules = {}
+    for item in profile.get("vulnerabilities", []) or []:
+        cve_id = str(item["cve"]).upper()
+        packages = item.get("packages") or []
+        vulnerability_rules[cve_id] = {
+            "rule_id": item["id"],
+            "cve": cve_id,
+            "title": item["title"],
+            "severity": item["severity"],
+            "remediation": item["remediation"],
+            "packages": {package.lower() for package in packages},
+        }
+
+    return sca_rules, vulnerability_rules
 
 
 def load_env_file(path):
@@ -264,12 +278,15 @@ def normalize_sca_findings(host, sca_checks, sca_rules):
     return findings
 
 
-def fetch_vulnerabilities(indexer, hosts):
+def fetch_vulnerabilities(indexer, hosts, vulnerability_rules):
     page_size = 500
     collected_hits = []
     total = None
     pages = 0
     search_after = None
+    tracked_cves = sorted(vulnerability_rules)
+    if not tracked_cves:
+        return [], {"skipped": "no configured vulnerabilities", "hits": {"total": 0, "hits": []}}
 
     while True:
         body = {
@@ -280,8 +297,11 @@ def fetch_vulnerabilities(indexer, hosts):
                 {"_id": {"order": "asc"}},
             ],
             "query": {
-                "terms": {
-                    "agent.name": list(hosts),
+                "bool": {
+                    "filter": [
+                        {"terms": {"agent.name": list(hosts)}},
+                        {"terms": {"vulnerability.id": tracked_cves}},
+                    ]
                 }
             },
         }
@@ -306,7 +326,7 @@ def fetch_vulnerabilities(indexer, hosts):
     return collected_hits, {"pages": pages, "hits": {"total": total, "hits": collected_hits}}
 
 
-def normalize_vulnerability_findings(vulnerability_hits, targets):
+def normalize_vulnerability_findings(vulnerability_hits, targets, vulnerability_rules):
     findings = []
     for hit in vulnerability_hits:
         source = hit.get("_source", {})
@@ -319,7 +339,13 @@ def normalize_vulnerability_findings(vulnerability_hits, targets):
 
         package_name = package.get("name", "unknown-package")
         package_version = package.get("version", "unknown-version")
-        cve_id = vulnerability.get("id", hit.get("_id", "unknown-vulnerability"))
+        cve_id = str(vulnerability.get("id", hit.get("_id", "unknown-vulnerability"))).upper()
+        rule_meta = vulnerability_rules.get(cve_id)
+        if not rule_meta:
+            continue
+        if rule_meta["packages"] and package_name.lower() not in rule_meta["packages"]:
+            continue
+
         evidence = [
             f"Package: {package_name} {package_version}",
             f"CVE: {cve_id}",
@@ -338,12 +364,12 @@ def normalize_vulnerability_findings(vulnerability_hits, targets):
                 "host": host,
                 "source": "wazuh-indexer-vulnerabilities",
                 "category": "vulnerability",
-                "rule_id": f"{cve_id}:{package_name}",
-                "title": f"{cve_id} affects package {package_name}",
-                "severity": normalize_severity(vulnerability.get("severity")),
+                "rule_id": rule_meta["rule_id"],
+                "title": rule_meta["title"],
+                "severity": rule_meta["severity"],
                 "status": "fail",
                 "evidence": evidence,
-                "remediation": f"Update or remove package {package_name} {package_version} to remediate {cve_id}.",
+                "remediation": rule_meta["remediation"],
             }
         )
     return findings
@@ -357,7 +383,7 @@ def main():
     parser.add_argument("--hosts", default=",".join(DEFAULT_TARGETS))
     args = parser.parse_args()
     targets = parse_hosts(args.hosts)
-    sca_rules = load_profile_sca_rules()
+    sca_rules, vulnerability_rules = load_profile()
 
     creds = load_env_file(CREDS_PATH)
     required = ("WAZUH_API_URL", "WAZUH_API_USER", "WAZUH_API_PASSWORD")
@@ -407,11 +433,11 @@ def main():
 
     if indexer is not None:
         try:
-            vulnerability_hits, vulnerability_response = fetch_vulnerabilities(indexer, targets)
+            vulnerability_hits, vulnerability_response = fetch_vulnerabilities(indexer, targets, vulnerability_rules)
         except HTTPError as exc:
             raise RuntimeError(f"Failed to query Wazuh indexer vulnerability data: HTTP {exc.code}") from exc
         raw_vulnerabilities["indexer"] = vulnerability_response
-        findings.extend(normalize_vulnerability_findings(vulnerability_hits, targets))
+        findings.extend(normalize_vulnerability_findings(vulnerability_hits, targets, vulnerability_rules))
 
     findings = deduplicate(findings)
     findings.sort(key=lambda item: (item["host"], item["status"] != "fail", item["category"], item["rule_id"]))
