@@ -39,6 +39,7 @@ Wazuh indexer хранит все найденные CVE в индексах `wa
 - `cve`: CVE ID, например `CVE-2024-6387`;
 - `title`: короткое название finding;
 - `severity`: уровень критичности, допустимы `critical`, `high`, `medium`, `low`, `info`;
+- `cvss`: необязательная CVSS metadata для отображения проверки даже при `pass`;
 - `remediation`: направление исправления;
 - `packages`: необязательный список пакетов. Если список задан, finding создаётся только для совпадающих `package.name`.
 
@@ -50,10 +51,15 @@ vulnerabilities:
     cve: CVE-2024-6387
     title: OpenSSH regreSSHion CVE-2024-6387
     severity: critical
+    cvss:
+      base_score: 8.1
+      vector: CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:H/A:H
     remediation: Update OpenSSH packages to a fixed vendor version.
     packages:
       - openssh-server
 ```
+
+Для `fail` exporter в первую очередь использует package/version и CVSS из документа Wazuh Indexer. Для `pass`, когда matching vulnerability document отсутствует, exporter использует `cve`, `packages` и `cvss` из профиля.
 
 Если `vulnerabilities: []`, экспорт vulnerability snapshot пропускается и findings по всей базе Wazuh не создаются.
 

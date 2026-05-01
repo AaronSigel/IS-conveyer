@@ -227,6 +227,9 @@ vulnerabilities:
     cve: CVE-2024-6387
     title: OpenSSH regreSSHion remote code execution
     severity: high
+    cvss:
+      base_score: 8.1
+      vector: CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:H/A:H
     remediation: Update openssh-server to the fixed Ubuntu 24.04 package version or later.
     packages:
       - openssh-server
@@ -235,6 +238,9 @@ vulnerabilities:
     cve: CVE-2024-39894
     title: OpenSSH ObscureKeystrokeTiming information exposure
     severity: medium
+    cvss:
+      base_score: 7.5
+      vector: CVSS:3.1/AV:N/AC:H/PR:N/UI:R/S:U/C:H/I:H/A:H
     remediation: Update OpenSSH client and server packages to the fixed Ubuntu 24.04 package version or later.
     packages:
       - openssh-client
@@ -244,6 +250,9 @@ vulnerabilities:
     cve: CVE-2024-2511
     title: OpenSSL TLSv1.3 session resource exhaustion
     severity: medium
+    cvss:
+      base_score: 5.9
+      vector: CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:N/I:N/A:H
     remediation: Update libssl3t64 and openssl to the fixed Ubuntu 24.04 package version or later.
     packages:
       - libssl3t64
@@ -253,6 +262,9 @@ vulnerabilities:
     cve: CVE-2024-4603
     title: OpenSSL excessive DSA key validation denial of service
     severity: medium
+    cvss:
+      base_score: 5.3
+      vector: CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:L
     remediation: Update libssl3t64 and openssl to the fixed Ubuntu 24.04 package version or later.
     packages:
       - libssl3t64
@@ -262,6 +274,9 @@ vulnerabilities:
     cve: CVE-2024-4741
     title: OpenSSL rarely-used API memory handling flaw
     severity: high
+    cvss:
+      base_score: 7.5
+      vector: CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H
     remediation: Update libssl3t64 and openssl to the fixed Ubuntu 24.04 package version or later.
     packages:
       - libssl3t64
@@ -271,6 +286,9 @@ vulnerabilities:
     cve: CVE-2024-5535
     title: OpenSSL ALPN buffer handling information exposure
     severity: medium
+    cvss:
+      base_score: 9.1
+      vector: CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:H
     remediation: Update libssl3t64 and openssl to the fixed Ubuntu 24.04 package version or later.
     packages:
       - libssl3t64
@@ -280,6 +298,9 @@ vulnerabilities:
     cve: CVE-2024-6119
     title: OpenSSL X.509 certificate validation flaw
     severity: medium
+    cvss:
+      base_score: 7.5
+      vector: CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H
     remediation: Update libssl3t64 and openssl to the fixed Ubuntu 24.04 package version or later.
     packages:
       - libssl3t64
@@ -289,6 +310,9 @@ vulnerabilities:
     cve: CVE-2024-7264
     title: curl ASN.1 Generalized Time parsing flaw
     severity: medium
+    cvss:
+      base_score: 6.5
+      vector: CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:U/C:N/I:N/A:H
     remediation: Update curl and libcurl packages to the fixed Ubuntu 24.04 package version or later.
     packages:
       - curl
@@ -299,6 +323,9 @@ vulnerabilities:
     cve: CVE-2024-8096
     title: curl OCSP stapling certificate check flaw
     severity: medium
+    cvss:
+      base_score: 6.5
+      vector: CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:L/A:N
     remediation: Update curl and libcurl packages to the fixed Ubuntu 24.04 package version or later.
     packages:
       - curl
@@ -309,6 +336,9 @@ vulnerabilities:
     cve: CVE-2024-9681
     title: curl HSTS cache information exposure
     severity: medium
+    cvss:
+      base_score: 6.5
+      vector: CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:N/I:H/A:L
     remediation: Update curl and libcurl packages to the fixed Ubuntu 24.04 package version or later.
     packages:
       - curl
@@ -319,6 +349,9 @@ vulnerabilities:
     cve: CVE-2025-32462
     title: Sudo host restriction bypass
     severity: high
+    cvss:
+      base_score: 2.8
+      vector: CVSS:3.1/AV:L/AC:H/PR:L/UI:N/S:C/C:N/I:L/A:N
     remediation: Update sudo to the fixed Ubuntu 24.04 package version or later.
     packages:
       - sudo
@@ -327,6 +360,9 @@ vulnerabilities:
     cve: CVE-2025-32463
     title: Sudo chroot option local privilege escalation
     severity: critical
+    cvss:
+      base_score: 7.8
+      vector: CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:H
     remediation: Update sudo to the fixed Ubuntu 24.04 package version or later.
     packages:
       - sudo
@@ -335,6 +371,9 @@ vulnerabilities:
     cve: CVE-2024-47814
     title: Vim use-after-free denial of service
     severity: medium
+    cvss:
+      base_score: 3.9
+      vector: CVSS:3.1/AV:L/AC:L/PR:L/UI:R/S:U/C:N/I:L/A:L
     remediation: Update vim to the fixed Ubuntu 24.04 package version or later.
     packages:
       - vim

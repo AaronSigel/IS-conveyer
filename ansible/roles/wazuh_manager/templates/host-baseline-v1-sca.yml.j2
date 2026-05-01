@@ -91,9 +91,10 @@ checks:
     remediation: "Set /etc/shadow permissions to 0640 or 0600."
     compliance:
       - custom: ["SHADOW_FILE_PERMISSIONS_SECURE"]
-    condition: all
+    condition: any
     rules:
-      - 'c:stat -c %a /etc/shadow -> r:^(640|600)$'
+      - 'c:stat -c %a /etc/shadow -> r:^640$'
+      - 'c:stat -c %a /etc/shadow -> r:^600$'
 
   - id: 10021
     title: "Безопасные права на /etc/ssh/sshd_config"
@@ -102,9 +103,11 @@ checks:
     remediation: "Remove world-write permission from /etc/ssh/sshd_config."
     compliance:
       - custom: ["SSHD_CONFIG_PERMISSIONS_SECURE"]
-    condition: all
+    condition: any
     rules:
-      - 'c:stat -c %A /etc/ssh/sshd_config -> !r:^.{8}w.'
+      - 'c:stat -c %a /etc/ssh/sshd_config -> r:^644$'
+      - 'c:stat -c %a /etc/ssh/sshd_config -> r:^640$'
+      - 'c:stat -c %a /etc/ssh/sshd_config -> r:^600$'
 
   - id: 10022
     title: "Безопасные права на demo sensitive file"
@@ -113,9 +116,10 @@ checks:
     remediation: "Set /tmp/demo-sensitive.txt permissions to 0640 and keep ownership restricted."
     compliance:
       - custom: ["DEMO_SENSITIVE_FILE_PERMISSIONS_SECURE"]
-    condition: all
+    condition: any
     rules:
-      - 'c:stat -c %a /tmp/demo-sensitive.txt -> r:^(640|600)$'
+      - 'c:stat -c %a /tmp/demo-sensitive.txt -> r:^640$'
+      - 'c:stat -c %a /tmp/demo-sensitive.txt -> r:^600$'
 
   - id: 10030
     title: "Telnet не должен быть установлен"
@@ -197,6 +201,5 @@ checks:
       - custom: ["TIME_SYNC_ENABLED"]
     condition: any
     rules:
-      - 'c:timedatectl show -p NTPSynchronized --value -> r:^yes$'
       - 'c:systemctl is-active chrony -> r:^active$'
       - 'c:systemctl is-active systemd-timesyncd -> r:^active$'

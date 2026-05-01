@@ -56,6 +56,7 @@ def load_profile(path=PROFILE_PATH):
             "severity": item["severity"],
             "remediation": item["remediation"],
             "packages": {package.lower() for package in packages},
+            "cvss": item.get("cvss") or {},
         }
 
     return sca_rules, vulnerability_rules
@@ -352,26 +353,91 @@ def normalize_vulnerability_findings(vulnerability_hits, targets, vulnerability_
         ]
         if vulnerability.get("severity"):
             evidence.append(f"Severity: {vulnerability['severity']}")
+        cvss = {}
         if vulnerability.get("score", {}).get("base") is not None:
+            cvss["base_score"] = vulnerability["score"]["base"]
             evidence.append(f"CVSS base: {vulnerability['score']['base']}")
+        elif rule_meta["cvss"].get("base_score") is not None:
+            cvss["base_score"] = rule_meta["cvss"]["base_score"]
+            evidence.append(f"CVSS base: {rule_meta['cvss']['base_score']}")
+        if vulnerability.get("score", {}).get("vector"):
+            cvss["vector"] = vulnerability["score"]["vector"]
+        elif rule_meta["cvss"].get("vector"):
+            cvss["vector"] = rule_meta["cvss"]["vector"]
         if vulnerability.get("published_at"):
             evidence.append(f"Published: {vulnerability['published_at']}")
         if vulnerability.get("detected_at"):
             evidence.append(f"Detected: {vulnerability['detected_at']}")
 
-        findings.append(
-            {
+        finding = {
+            "host": host,
+            "source": "wazuh-indexer-vulnerabilities",
+            "category": "vulnerability",
+            "rule_id": rule_meta["rule_id"],
+            "title": rule_meta["title"],
+            "severity": rule_meta["severity"],
+            "status": "fail",
+            "evidence": evidence,
+            "remediation": rule_meta["remediation"],
+            "finding_type": "software_vulnerability",
+            "external_ids": {"cve": cve_id},
+            "cve": cve_id,
+            "affected_component": {
+                "package": package_name,
+                "version": package_version,
+            },
+        }
+        if cvss:
+            finding["cvss"] = cvss
+        findings.append(finding)
+    return findings
+
+
+def build_vulnerability_pass_findings(targets, vulnerability_rules, failed_findings):
+    failed_keys = {
+        (finding["host"], finding["rule_id"])
+        for finding in failed_findings
+        if finding.get("status") == "fail"
+    }
+    findings = []
+    for host in targets:
+        for rule_meta in vulnerability_rules.values():
+            if (host, rule_meta["rule_id"]) in failed_keys:
+                continue
+
+            packages = sorted(rule_meta["packages"])
+            evidence = [
+                f"CVE: {rule_meta['cve']}",
+                "No matching Wazuh vulnerability state found for this host and rule.",
+            ]
+            if rule_meta["cvss"].get("base_score") is not None:
+                evidence.append(f"CVSS base: {rule_meta['cvss']['base_score']}")
+            if packages:
+                evidence.append(f"Package: {', '.join(packages)}")
+
+            affected_component = {}
+            if packages:
+                affected_component["package"] = ", ".join(packages)
+
+            finding = {
                 "host": host,
                 "source": "wazuh-indexer-vulnerabilities",
                 "category": "vulnerability",
                 "rule_id": rule_meta["rule_id"],
                 "title": rule_meta["title"],
                 "severity": rule_meta["severity"],
-                "status": "fail",
+                "status": "pass",
                 "evidence": evidence,
                 "remediation": rule_meta["remediation"],
+                "finding_type": "software_vulnerability",
+                "external_ids": {"cve": rule_meta["cve"]},
+                "cve": rule_meta["cve"],
             }
-        )
+            if rule_meta["cvss"]:
+                finding["cvss"] = rule_meta["cvss"]
+            if affected_component:
+                finding["affected_component"] = affected_component
+            findings.append(finding)
     return findings
 
 
@@ -437,7 +503,9 @@ def main():
         except HTTPError as exc:
             raise RuntimeError(f"Failed to query Wazuh indexer vulnerability data: HTTP {exc.code}") from exc
         raw_vulnerabilities["indexer"] = vulnerability_response
-        findings.extend(normalize_vulnerability_findings(vulnerability_hits, targets, vulnerability_rules))
+        vulnerability_findings = normalize_vulnerability_findings(vulnerability_hits, targets, vulnerability_rules)
+        findings.extend(vulnerability_findings)
+        findings.extend(build_vulnerability_pass_findings(targets, vulnerability_rules, vulnerability_findings))
 
     findings = deduplicate(findings)
     findings.sort(key=lambda item: (item["host"], item["status"] != "fail", item["category"], item["rule_id"]))

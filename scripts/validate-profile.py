@@ -93,6 +93,20 @@ def validate_profile(path):
             if not isinstance(packages, list) or not all(isinstance(package, str) and package for package in packages):
                 errors.append(f"vulnerability #{index}: packages must be a list of non-empty strings")
 
+            cvss = vulnerability.get("cvss", {})
+            if cvss is None:
+                cvss = {}
+            if not isinstance(cvss, dict):
+                errors.append(f"vulnerability #{index}: cvss must be a mapping")
+            else:
+                base_score = cvss.get("base_score")
+                if base_score is not None:
+                    if not isinstance(base_score, (int, float)) or not 0 <= float(base_score) <= 10:
+                        errors.append(f"vulnerability #{index}: cvss.base_score must be a number from 0 to 10")
+                vector = cvss.get("vector")
+                if vector is not None and (not isinstance(vector, str) or not vector):
+                    errors.append(f"vulnerability #{index}: cvss.vector must be a non-empty string")
+
     if errors:
         raise ValueError("\n".join(errors))
 

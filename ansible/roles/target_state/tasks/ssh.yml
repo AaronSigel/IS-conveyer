@@ -25,7 +25,20 @@
       # Managed by target_state role
       PermitRootLogin {{ ssh_permit_root_login }}
       PasswordAuthentication {{ ssh_password_authentication }}
-      PermitEmptyPasswords no
-      X11Forwarding no
-      MaxAuthTries 4
+      PermitEmptyPasswords {{ ssh_permit_empty_passwords }}
+      X11Forwarding {{ ssh_x11_forwarding }}
+      MaxAuthTries {{ ssh_max_auth_tries }}
+  notify: Restart ssh
+
+- name: Align early cloud image SSH password-auth drop-ins with demo state
+  ansible.builtin.copy:
+    dest: "{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      PasswordAuthentication {{ ssh_password_authentication }}
+  loop:
+    - /etc/ssh/sshd_config.d/50-cloud-init.conf
+    - /etc/ssh/sshd_config.d/60-cloudimg-settings.conf
   notify: Restart ssh

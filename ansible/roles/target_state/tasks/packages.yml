@@ -13,3 +13,14 @@
     update_cache: true
     cache_valid_time: 3600
   when: target_security_state == "vulnerable"
+
+- name: Install vulnerable package versions on vulnerable host
+  ansible.builtin.apt:
+    name: "{{ vulnerable_package_versions }}"
+    state: present
+    allow_downgrade: true
+    update_cache: true
+    cache_valid_time: 3600
+  when:
+    - target_security_state == "vulnerable"
+    - vulnerable_package_versions | default([]) | length > 0

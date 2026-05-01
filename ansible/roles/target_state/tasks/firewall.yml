@@ -25,9 +25,23 @@
   changed_when: "'Firewall is active' in target_state_ufw_enable.stdout"
   when: firewall_enabled | bool
 
+- name: Ensure UFW service is active for compliant host
+  ansible.builtin.systemd:
+    name: ufw
+    enabled: true
+    state: started
+  when: firewall_enabled | bool
+
 - name: Disable firewall for vulnerable host
   ansible.builtin.command:
     cmd: ufw disable
   register: target_state_ufw_disable
   changed_when: "'Firewall stopped' in target_state_ufw_disable.stdout"
+  when: not (firewall_enabled | bool)
+
+- name: Ensure UFW service is inactive for vulnerable host
+  ansible.builtin.systemd:
+    name: ufw
+    enabled: false
+    state: stopped
   when: not (firewall_enabled | bool)

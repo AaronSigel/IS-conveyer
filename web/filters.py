@@ -29,6 +29,8 @@ def normalize_finding(item: dict[str, Any]) -> dict[str, Any]:
     rule_id = str(finding.get("rule_id") or "")
     evidence = finding.get("evidence") if isinstance(finding.get("evidence"), list) else []
     cvss = finding.get("cvss_base_score")
+    if cvss is None and isinstance(finding.get("cvss"), dict):
+        cvss = finding["cvss"].get("base_score")
     if cvss is None:
         for value in evidence:
             match = re.search(r"CVSS base:\s*([0-9]+(?:\.[0-9]+)?)", str(value), re.I)
@@ -40,6 +42,9 @@ def normalize_finding(item: dict[str, Any]) -> dict[str, Any]:
         match = re.search(r"(CVE-\d{4}-\d+)", rule_id + " " + " ".join(map(str, evidence)), re.I)
         cve = match.group(1).upper() if match else None
     package = finding.get("package")
+    if not package and isinstance(finding.get("affected_component"), dict):
+        component = finding["affected_component"]
+        package = component.get("package") or component.get("name")
     if not package:
         if ":" in rule_id and rule_id.upper().startswith("CVE-"):
             package = rule_id.split(":", 1)[1]
@@ -48,6 +53,10 @@ def normalize_finding(item: dict[str, Any]) -> dict[str, Any]:
                 match = re.search(r"Package:\s*([^\s]+)", str(value), re.I)
                 if match:
                     package = match.group(1)
+                    break
+                match = re.search(r"Packages filter:\s*(.+)", str(value), re.I)
+                if match:
+                    package = match.group(1).strip()
                     break
     finding.update(
         {
