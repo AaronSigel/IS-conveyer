@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 import pathlib
+import importlib.util
+import json
 import subprocess
 import sys
 import tempfile
@@ -43,6 +45,35 @@ def assert_no_forbidden_sections(report):
         assert marker not in upper, f"Forbidden section found: {marker}"
 
 
+def assert_passport_format(report, expected_passports):
+    assert "Паспорт №" in report
+    assert report.count("Паспорт №") == expected_passports
+    assert "<th>host</th><th>source</th><th>category</th><th>rule_id</th>" not in report
+    assert "| host | source | category | rule_id |" not in report
+    assert "Рекомендации/remediation" not in report
+    assert "Возможные меры по устранению уязвимости" in report
+
+
+def render_sample_html():
+    if str(PROJECT_ROOT) not in sys.path:
+        sys.path.insert(0, str(PROJECT_ROOT))
+    spec = importlib.util.spec_from_file_location("web_reports", PROJECT_ROOT / "web" / "reports.py")
+    module = importlib.util.module_from_spec(spec)
+    assert spec and spec.loader
+    spec.loader.exec_module(module)
+    findings = json.loads(SAMPLE_FINDINGS.read_text(encoding="utf-8"))
+    filtered = [item for item in findings if item.get("status") == "fail"]
+    export = {
+        "id": "test",
+        "title": "Тестовый экспорт",
+        "created_at": "2026-05-01T00:00:00+03:00",
+        "filters": {"status": {"op": "in", "value": ["fail"]}},
+        "result_summary": {"total_findings_after_filter": len(filtered), "fail": len(filtered), "high": 1},
+    }
+    metadata = {"id": "run-test", "status": "completed", "hosts": ["target1"], "profile_id": "host-baseline-v1"}
+    return module.render_report_html(metadata, export, findings, module.normalize_findings(filtered))
+
+
 def main():
     with tempfile.TemporaryDirectory() as tmp:
         tmpdir = pathlib.Path(tmp)
@@ -51,6 +82,9 @@ def main():
         assert_sections(full_report)
         assert_no_forbidden_sections(full_report)
         assert full_report.count("### 5.") == 4, "Expected one passport per sample finding"
+        assert_passport_format(full_report, 4)
+        assert "| CVSS | 9.3" in full_report
+        assert "Нормализованный severity | critical" in full_report
 
         high_report = run_report(tmpdir / "high.md", "--severity", "high")
         assert "Запрет входа root по SSH" in high_report
@@ -61,6 +95,8 @@ def main():
         failed_report = run_report(tmpdir / "failed.md", "--status", "failed")
         assert "auditd установлен" not in failed_report
         assert failed_report.count("### 5.") == 3
+        assert_passport_format(failed_report, 3)
+        assert "Применённые фильтры: статус = fail." in failed_report
 
         cvss_report = run_report(tmpdir / "cvss.md", "--source", "wazuh_vulnerability", "--cvss-min", "5.0")
         assert "Sudo chroot option" in cvss_report
@@ -70,6 +106,11 @@ def main():
         empty_report = run_report(tmpdir / "empty.md", "--severity", "low", "--status", "failed")
         assert "По заданным критериям фильтрации уязвимости и несоответствия не выявлены." in empty_report
         assert "### 5." not in empty_report
+
+        html_report = render_sample_html()
+        assert_passport_format(html_report, 3)
+        assert "Применённые фильтры: статус = fail." in html_report
+        assert "{'status': {'op': 'in'" not in html_report
 
     print("generate-report smoke tests passed")
 

@@ -1,14 +1,35 @@
 import re
+import importlib.util
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from fastapi.templating import Jinja2Templates
+try:
+    from fastapi.templating import Jinja2Templates
+except ModuleNotFoundError:
+    from jinja2 import Environment, FileSystemLoader
+
+    class Jinja2Templates:
+        def __init__(self, directory: str):
+            self.env = Environment(loader=FileSystemLoader(directory), autoescape=True)
+
+        def get_template(self, name: str):
+            return self.env.get_template(name)
 
 from web import runs
 from web.filters import apply_filters, normalize_findings
 
 
 templates = Jinja2Templates(directory=str(Path(__file__).resolve().parent / "templates"))
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+
+
+def report_generator_module():
+    spec = importlib.util.spec_from_file_location("generate_report", PROJECT_ROOT / "scripts" / "generate-report.py")
+    module = importlib.util.module_from_spec(spec)
+    assert spec and spec.loader
+    spec.loader.exec_module(module)
+    return module
 
 
 def slugify(value: str) -> str:
@@ -29,6 +50,35 @@ def unique_export_id(run_id: str, base: str) -> str:
 
 def summary_for(findings: list[dict[str, Any]]) -> dict[str, int]:
     return runs.summarize_findings(findings)
+
+
+def human_filter_text(filters: dict[str, Any]) -> str:
+    if not filters:
+        return "Фильтры отчёта не применялись. В отчёт включены все результаты проверки."
+    labels = {
+        "status": "статус",
+        "severity": "уровень опасности",
+        "category": "категория",
+        "source": "источник",
+        "host": "хост",
+        "rule_id": "rule_id",
+        "title": "название",
+        "cve": "CVE",
+        "package": "пакет",
+        "cvss_base_score": "CVSS",
+    }
+    ops = {"in": "=", "eq": "=", "contains": "содержит", "gte": ">=", "lte": "<=", "between": "между"}
+    parts = []
+    for field, spec in filters.items():
+        if not spec:
+            continue
+        value = spec.get("value")
+        if isinstance(value, list):
+            rendered = " - ".join(str(item) for item in value) if spec.get("op") == "between" else ", ".join(str(item) for item in value)
+        else:
+            rendered = str(value)
+        parts.append(f"{labels.get(field, field)} {ops.get(spec.get('op'), spec.get('op'))} {rendered}")
+    return "Применённые фильтры: " + "; ".join(parts) + "."
 
 
 def create_export(run_id: str, title: str, filters: dict[str, Any], export_id: str | None = None) -> dict[str, Any]:
@@ -67,6 +117,11 @@ def render_report_html(
     all_findings: list[dict[str, Any]],
     filtered_findings: list[dict[str, Any]],
 ) -> str:
+    generator = report_generator_module()
+    profile = generator.load_profile(generator.DEFAULT_PROFILE)
+    enrichment = generator.load_enrichment(generator.DEFAULT_ENRICHMENT)
+    profile_index = generator.build_profile_index(profile, enrichment)
+    passports = generator.build_passports(filtered_findings, profile_index, metadata, datetime.now().astimezone())
     template = templates.get_template("report_print.html")
     return template.render(
         request=None,
@@ -74,6 +129,8 @@ def render_report_html(
         export=export,
         before_summary=summary_for(all_findings),
         findings=filtered_findings,
+        passports=passports,
+        filter_text=human_filter_text(export.get("filters") or {}),
     )
 
 

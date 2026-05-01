@@ -4,15 +4,18 @@
   <meta charset="utf-8">
   <title>{{ export.title }}</title>
   <style>
-    body { font-family: system-ui, -apple-system, Segoe UI, sans-serif; color:#17202a; }
-    h1, h2 { margin-bottom: 8px; }
-    table { width:100%; border-collapse:collapse; font-size:10px; }
+    body { font-family: system-ui, -apple-system, Segoe UI, sans-serif; color:#17202a; line-height:1.35; }
+    h1, h2, h3 { margin-bottom: 8px; }
+    table { width:100%; border-collapse:collapse; font-size:10px; margin:8px 0 14px; }
     th, td { border:1px solid #d7dde5; padding:5px; text-align:left; vertical-align:top; word-break:break-word; }
     th { background:#eef2f7; }
-    pre { white-space:pre-wrap; background:#f6f7f9; padding:10px; }
+    pre { white-space:pre-wrap; background:#f6f7f9; padding:10px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
     .metrics { display:grid; grid-template-columns:repeat(4, 1fr); gap:10px; margin:16px 0; }
     .metrics div { border:1px solid #d7dde5; padding:10px; }
     .metrics b { display:block; }
+    .passport { break-inside: avoid; page-break-inside: avoid; margin: 18px 0 26px; }
+    .passport h3 { border-bottom:2px solid #17202a; padding-bottom:5px; }
+    .label { font-weight:700; }
   </style>
 </head>
 <body class="print">
@@ -29,7 +32,7 @@
     <h2>Параметры экспорта</h2>
     <p>ID: {{ export.id }}</p>
     <p>Создан: {{ export.created_at }}</p>
-    <pre>{{ export.filters }}</pre>
+    <p>{{ filter_text }}</p>
   </section>
   <section class="metrics">
     <div><b>До фильтрации</b><span>{{ before_summary.total }}</span></div>
@@ -38,27 +41,50 @@
     <div><b>High</b><span>{{ export.result_summary.high }}</span></div>
   </section>
   <section>
-    <h2>Findings</h2>
-    <table>
-      <thead><tr><th>host</th><th>source</th><th>category</th><th>rule_id</th><th>title</th><th>status</th><th>severity</th><th>cvss</th><th>cve</th><th>package</th><th>evidence</th><th>remediation</th></tr></thead>
-      <tbody>
-      {% for item in findings %}
-      <tr>
-        <td>{{ item.host }}</td><td>{{ item.source }}</td><td>{{ item.category }}</td><td>{{ item.rule_id }}</td><td>{{ item.title }}</td><td>{{ item.status }}</td><td>{{ item.severity }}</td><td>{{ item.cvss_base_score if item.cvss_base_score is not none else "" }}</td><td>{{ item.cve or "" }}</td><td>{{ item.package or "" }}</td>
-        <td>{% for line in item.evidence %}<div>{{ line }}</div>{% endfor %}</td>
-        <td>{{ item.remediation }}</td>
-      </tr>
-      {% endfor %}
-      </tbody>
-    </table>
-  </section>
-  <section>
-    <h2>Рекомендации/remediation</h2>
-    <ul>
-    {% for item in findings if item.status == "fail" %}
-      <li>{{ item.rule_id }}: {{ item.remediation }}</li>
+    <h2>Паспорта выявленных уязвимостей и несоответствий</h2>
+    {% for passport in passports %}
+    <article class="passport">
+      <h3>Паспорт № {{ passport.passport_id }} — {{ passport.title_ru }}</h3>
+      <p class="label">{% if passport.template_kind == "package_vulnerability" %}Уязвимость пакета{% else %}Несоответствие конфигурации{% endif %}</p>
+      <table>
+        <tbody>
+          <tr><th>Поле</th><th>Значение</th></tr>
+          <tr><td>ID паспорта</td><td>{{ passport.passport_id }}</td></tr>
+          <tr><td>Название</td><td>{{ passport.title_ru }}</td></tr>
+          <tr><td>Тип finding</td><td>{{ passport.finding_type_ru }}</td></tr>
+          <tr><td>Статус</td><td>{{ passport.status_ru }}</td></tr>
+          <tr><td>Хост</td><td>{{ passport.host }}</td></tr>
+          <tr><td>Актив / компонент</td><td>{{ passport.asset_component }}</td></tr>
+          {% if passport.template_kind == "package_vulnerability" %}
+          <tr><td>Пакет</td><td>{{ passport.package_name }}</td></tr>
+          <tr><td>Установленная версия</td><td>{{ passport.installed_version }}</td></tr>
+          <tr><td>CVE</td><td>{{ passport.cve }}</td></tr>
+          <tr><td>CVSS</td><td>{{ passport.cvss }}</td></tr>
+          {% endif %}
+          <tr><td>Нормализованный severity</td><td>{{ passport.severity_normalized }}</td></tr>
+          <tr><td>Категория</td><td>{{ passport.category_ru }}</td></tr>
+          <tr><td>Источник</td><td>{{ passport.source_ru }}</td></tr>
+          <tr><td>Дата выявления</td><td>{{ passport.detected_at }}</td></tr>
+          <tr><td>Rule ID</td><td>{{ passport.rule_id }}</td></tr>
+        </tbody>
+      </table>
+      <table>
+        <tbody>
+          <tr><th>Поле</th><th>Значение</th></tr>
+          <tr><td>Команда проверки</td><td>{{ passport.verification_command }}</td></tr>
+          <tr><td>Ожидаемый результат</td><td>{{ passport.expected_result }}</td></tr>
+          <tr><td>Ссылки</td><td>{% for ref in passport.references %}<div>{{ ref }}</div>{% else %}данные отсутствуют{% endfor %}</td></tr>
+        </tbody>
+      </table>
+      <p><b>Описание:</b> {{ passport.description_ru }}</p>
+      <p><b>Evidence:</b></p>
+      <pre>{{ passport.evidence_structured }}</pre>
+      <p><b>Возможные последствия:</b> {{ passport.impact_ru }}</p>
+      <p><b>Возможные меры по устранению уязвимости:</b> {{ passport.remediation_ru }}</p>
+    </article>
+    {% else %}
+    <p>По заданным критериям фильтрации уязвимости и несоответствия не выявлены.</p>
     {% endfor %}
-    </ul>
   </section>
   <section>
     <h2>Приложение: источники данных</h2>

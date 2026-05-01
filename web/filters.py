@@ -58,6 +58,22 @@ def normalize_finding(item: dict[str, Any]) -> dict[str, Any]:
                 if match:
                     package = match.group(1).strip()
                     break
+    severity = str(finding.get("severity") or "info").lower()
+    finding_type = str(finding.get("finding_type") or "").lower()
+    if not finding_type and ("vulnerab" in source.lower() or str(finding.get("category") or "").lower() == "vulnerability"):
+        finding_type = "software_vulnerability"
+    if finding_type == "software_vulnerability" and cvss is not None:
+        score = float(cvss)
+        if score >= 9.0:
+            severity = "critical"
+        elif score >= 7.0:
+            severity = "high"
+        elif score >= 4.0:
+            severity = "medium"
+        elif score > 0.0:
+            severity = "low"
+        else:
+            severity = "info"
     finding.update(
         {
             "host": str(finding.get("host") or ""),
@@ -66,7 +82,7 @@ def normalize_finding(item: dict[str, Any]) -> dict[str, Any]:
             "rule_id": rule_id,
             "title": str(finding.get("title") or ""),
             "status": str(finding.get("status") or "").lower(),
-            "severity": str(finding.get("severity") or "info").lower(),
+            "severity": severity,
             "cvss_base_score": cvss,
             "cve": cve,
             "package": package,

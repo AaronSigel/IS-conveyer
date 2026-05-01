@@ -16,6 +16,7 @@ DEFAULT_FINDINGS = PROJECT_ROOT / "artifacts" / "unified-findings.json"
 DEFAULT_OUTPUT = PROJECT_ROOT / "artifacts" / "draft-report.md"
 DEFAULT_PROFILE = PROJECT_ROOT / "profiles" / "host-baseline-v1.yml"
 DEFAULT_METADATA = PROJECT_ROOT / "config" / "report-metadata.yml"
+DEFAULT_ENRICHMENT = PROJECT_ROOT / "config" / "finding-enrichment.yml"
 TEMPLATES_DIR = PROJECT_ROOT / "report" / "templates"
 TECHNICAL_TEMPLATE = "technical-report.md.j2"
 PASSPORT_TEMPLATE = "vulnerability-passport.md.j2"
@@ -43,6 +44,7 @@ def parse_args():
     parser.add_argument("--output", default=str(DEFAULT_OUTPUT), help="Path to markdown report.")
     parser.add_argument("--profile", default=str(DEFAULT_PROFILE), help="Path to assessment profile YAML.")
     parser.add_argument("--metadata", default=str(DEFAULT_METADATA), help="Path to report metadata YAML.")
+    parser.add_argument("--enrichment", default=str(DEFAULT_ENRICHMENT), help="Path to finding enrichment YAML/JSON.")
     parser.add_argument("--status", help="Comma-separated status filter.")
     parser.add_argument("--severity", help="Comma-separated severity filter.")
     parser.add_argument("--category", help="Comma-separated category filter.")
@@ -87,6 +89,15 @@ def load_metadata(path):
     metadata.setdefault("stand", {})
     metadata.setdefault("tools", [])
     return metadata
+
+
+def load_enrichment(path):
+    path = pathlib.Path(path)
+    if not path.exists():
+        return {}
+    if path.suffix.lower() == ".json":
+        return json.loads(path.read_text(encoding="utf-8"))
+    return load_yaml_file(path)
 
 
 def split_values(raw):
@@ -153,6 +164,37 @@ def filter_rows(filters):
     return rows
 
 
+def human_filter_text(filters):
+    if not filters:
+        return "Фильтры отчёта не применялись. В отчёт включены все результаты проверки."
+    labels = {
+        "status": "статус",
+        "severity": "уровень опасности",
+        "category": "категория",
+        "source": "источник",
+        "host": "хост",
+        "rule_id": "rule_id",
+        "finding_type": "тип finding",
+        "cvss_min": "CVSS",
+        "cvss_max": "CVSS",
+    }
+    parts = []
+    for key, value in filters.items():
+        if key == "status" and isinstance(value, list):
+            rendered = ", ".join(normalize_status(item) for item in value)
+        elif isinstance(value, list):
+            rendered = ", ".join(str(item) for item in value)
+        else:
+            rendered = normalize_status(value) if key == "status" else str(value)
+        if key == "cvss_min":
+            parts.append(f"{labels[key]} >= {rendered}")
+        elif key == "cvss_max":
+            parts.append(f"{labels[key]} <= {rendered}")
+        else:
+            parts.append(f"{labels.get(key, key)} = {rendered}")
+    return "Применённые фильтры: " + "; ".join(parts) + "."
+
+
 def list_match(actual, expected_values, *, normalizer=None, source=False):
     if actual is None:
         return False
@@ -180,6 +222,29 @@ def get_cvss_score(finding):
     return None
 
 
+def severity_from_cvss(score):
+    if score is None:
+        return None
+    if score >= 9.0:
+        return "critical"
+    if score >= 7.0:
+        return "high"
+    if score >= 4.0:
+        return "medium"
+    if score > 0.0:
+        return "low"
+    return "info"
+
+
+def normalized_severity(finding):
+    if infer_finding_type(finding) == "software_vulnerability":
+        score = get_cvss_score(finding)
+        severity = severity_from_cvss(score)
+        if severity:
+            return severity
+    return str(finding.get("severity", "info")).lower()
+
+
 def infer_finding_type(finding):
     explicit = finding.get("finding_type")
     if explicit:
@@ -198,7 +263,7 @@ def apply_filters(findings, filters):
     for finding in findings:
         if filters.get("status") and not list_match(finding.get("status"), filters["status"], normalizer=normalize_status):
             continue
-        if filters.get("severity") and not list_match(finding.get("severity"), filters["severity"]):
+        if filters.get("severity") and not list_match(normalized_severity(finding), filters["severity"]):
             continue
         if filters.get("category") and not list_match(finding.get("category"), filters["category"]):
             continue
@@ -223,7 +288,7 @@ def apply_filters(findings, filters):
 
 
 def build_summary(selected_findings):
-    by_severity = Counter(str(item.get("severity", "info")).lower() for item in selected_findings)
+    by_severity = Counter(normalized_severity(item) for item in selected_findings)
     by_category = Counter(str(item.get("category", UNKNOWN)).lower() for item in selected_findings)
     by_finding_type = Counter(infer_finding_type(item) for item in selected_findings)
     hosts = {str(item.get("host")) for item in selected_findings if item.get("host")}
@@ -240,16 +305,27 @@ def build_summary(selected_findings):
     }
 
 
-def build_profile_index(profile):
+def build_profile_index(profile, enrichment=None):
     index = {}
-    for section in ("checks", "vulnerabilities", "rules"):
-        for item in profile.get(section, []) or []:
-            keys = [item.get("id"), item.get("rule_id"), item.get("cve")]
-            if item.get("sca_check_id") is not None:
-                keys.append(str(item["sca_check_id"]))
-            for key in keys:
-                if key:
-                    index[str(key).lower()] = item
+    sources = [profile]
+    if enrichment:
+        sources.append({"checks": enrichment.get("sca_rules", []), "vulnerabilities": enrichment.get("cves", [])})
+    for source in sources:
+        for section in ("checks", "vulnerabilities", "rules"):
+            for item in source.get(section, []) or []:
+                keys = [item.get("id"), item.get("rule_id"), item.get("cve")]
+                if item.get("sca_check_id") is not None:
+                    keys.append(str(item["sca_check_id"]))
+                for key in keys:
+                    if not key:
+                        continue
+                    normalized = str(key).lower()
+                    if normalized in index:
+                        merged = dict(index[normalized])
+                        merged.update(item)
+                        index[normalized] = merged
+                    else:
+                        index[normalized] = item
     return index
 
 
@@ -370,6 +446,25 @@ def affected_component_text(finding, passport_meta):
     return package_from_evidence(finding) or NOT_APPLICABLE
 
 
+def package_name(finding, passport_meta):
+    component = first_value(finding.get("affected_component"), passport_meta.get("affected_component"), default={})
+    if isinstance(component, dict):
+        return first_value(component.get("package"), component.get("name"), default=package_from_evidence(finding) or NOT_APPLICABLE)
+    return package_from_evidence(finding) or NOT_APPLICABLE
+
+
+def installed_version(finding, passport_meta):
+    component = first_value(finding.get("affected_component"), passport_meta.get("affected_component"), default={})
+    if isinstance(component, dict):
+        return first_value(component.get("version"), default=NOT_APPLICABLE)
+    package = package_from_evidence(finding)
+    if package:
+        parts = package.rsplit(" ", 1)
+        if len(parts) == 2:
+            return parts[1]
+    return NOT_APPLICABLE
+
+
 def service_port_protocol_text(finding, passport_meta):
     component = first_value(finding.get("affected_component"), passport_meta.get("affected_component"), default={})
     if not isinstance(component, dict):
@@ -418,8 +513,50 @@ def build_passport(finding, index, profile_index, metadata, report_datetime):
             default="Уязвимость конфигурации / несоответствие",
         )
 
+    cvss_score = get_cvss_score(finding)
+    cve = cve_from_finding(finding)
+    references = first_value(finding.get("references"), passport_meta.get("references"), profile_rule.get("references"), default=[])
+    if isinstance(references, str):
+        references = [references]
+    if not isinstance(references, list):
+        references = []
+    category = first_value(finding.get("category"), profile_rule.get("category"), default=UNKNOWN)
+    status = normalize_status(first_value(finding.get("status"), default=UNKNOWN))
+    severity = normalized_severity(finding)
+    source = first_value(finding.get("source"), default=UNKNOWN)
     return {
         "passport_id": passport_id,
+        "title_ru": first_value(finding.get("title"), profile_rule.get("title")),
+        "finding_type_ru": "Уязвимость пакета" if software_vulnerability else "Несоответствие конфигурации",
+        "status_ru": status,
+        "host": first_value(finding.get("host"), default=UNKNOWN),
+        "asset_component": affected_component_text(finding, passport_meta),
+        "package_name": package_name(finding, passport_meta) if software_vulnerability else NOT_APPLICABLE,
+        "installed_version": installed_version(finding, passport_meta) if software_vulnerability else NOT_APPLICABLE,
+        "cve": cve or NOT_APPLICABLE,
+        "cvss": cvss_text(finding, software_vulnerability),
+        "severity_normalized": severity,
+        "category_ru": category,
+        "source_ru": source,
+        "detected_at": first_value(finding.get("detected_at"), default=NO_DATA),
+        "rule_id": first_value(finding.get("rule_id"), default=UNKNOWN),
+        "description_ru": first_value(
+            finding.get("description_ru"),
+            finding.get("description"),
+            profile_rule.get("description_ru"),
+            profile_rule.get("rationale"),
+            finding.get("title"),
+            default=NO_DATA,
+        ),
+        "evidence_structured": evidence_text(finding).replace("<br>", "\n"),
+        "impact_ru": first_value(finding.get("impact_ru"), finding.get("impact"), passport_meta.get("impact"), profile_rule.get("impact_ru"), default=NO_DATA),
+        "remediation_ru": first_value(finding.get("remediation_ru"), finding.get("remediation"), profile_rule.get("remediation_ru"), profile_rule.get("remediation"), default=NO_DATA),
+        "verification_command": first_value(finding.get("verification_command"), profile_rule.get("verification_command"), default=NO_DATA),
+        "expected_result": first_value(finding.get("expected_result"), profile_rule.get("expected_result"), default=NO_DATA),
+        "references": references,
+        "template_kind": "package_vulnerability" if software_vulnerability else "configuration",
+        "cvss_base_score": cvss_score,
+        # Backward-compatible names used by older schema/templates.
         "title": first_value(finding.get("title"), profile_rule.get("title")),
         "external_ids_text": external_ids_text(finding, passport_meta),
         "vulnerability_class": vulnerability_class,
@@ -433,19 +570,17 @@ def build_passport(finding, index, profile_index, metadata, report_datetime):
         ),
         "weakness_type": first_value(finding.get("weakness_type"), passport_meta.get("weakness_type")),
         "location": first_value(finding.get("location"), passport_meta.get("location")),
-        "host": first_value(finding.get("host"), default=UNKNOWN),
         "os_platform": first_value(finding.get("os_platform"), host_meta.get("os"), default=UNKNOWN),
         "service_port_protocol": service_port_protocol_text(finding, passport_meta),
         "detection_method": detection_method(finding, passport_meta, software_vulnerability),
-        "source": first_value(finding.get("source"), default=UNKNOWN),
-        "severity": first_value(finding.get("severity"), default=UNKNOWN),
+        "source": source,
+        "severity": severity,
         "cvss_text": cvss_text(finding, software_vulnerability),
-        "status": first_value(finding.get("status"), default=UNKNOWN),
-        "detected_at": first_value(finding.get("detected_at"), default=NO_DATA),
+        "status": status,
         "description": first_value(finding.get("description"), profile_rule.get("rationale"), finding.get("title"), default=NO_DATA),
         "evidence": evidence_text(finding),
-        "impact": first_value(finding.get("impact"), passport_meta.get("impact"), default=NO_DATA),
-        "remediation": first_value(finding.get("remediation"), profile_rule.get("remediation"), default=NO_DATA),
+        "impact": first_value(finding.get("impact"), passport_meta.get("impact"), profile_rule.get("impact_ru"), default=NO_DATA),
+        "remediation": first_value(finding.get("remediation"), profile_rule.get("remediation_ru"), profile_rule.get("remediation"), default=NO_DATA),
     }
 
 
@@ -519,6 +654,7 @@ def build_context(args, findings, selected_findings, filters, metadata, profile,
         "limitations": assessment.get("limitations") or ["Ограничения проверки не заданы."],
         "filters": filters,
         "filter_rows": filter_rows(filters),
+        "filter_text": human_filter_text(filters),
         "hosts": checked_hosts or hosts,
         "stand_hosts": hosts,
         "tools": metadata.get("tools", []) or [],
@@ -547,9 +683,10 @@ def main():
     findings = load_findings(args.findings)
     profile = load_profile(args.profile)
     metadata = load_metadata(args.metadata)
+    enrichment = load_enrichment(args.enrichment)
     filters = build_filters(args)
     selected_findings = apply_filters(findings, filters)
-    profile_index = build_profile_index(profile)
+    profile_index = build_profile_index(profile, enrichment)
     report_datetime = datetime.now().astimezone()
     passports = build_passports(selected_findings, profile_index, metadata, report_datetime)
     context = build_context(args, findings, selected_findings, filters, metadata, profile, passports, report_datetime)
