@@ -1,0 +1,27 @@
+---
+target_security_state: compliant
+
+ssh_permit_root_login: "no"
+ssh_password_authentication: "no"
+ssh_permit_empty_passwords: "no"
+ssh_x11_forwarding: "no"
+ssh_max_auth_tries: 4
+
+firewall_enabled: true
+
+forbidden_packages:
+  - telnet
+  - telnetd
+  - rsh-client
+  - rsh-redone-client
+  - rsh-server
+  - vsftpd
+  - proftpd
+  - pure-ftpd
+
+vulnerable_package_versions: []
+
+sensitive_file_path: /tmp/demo-sensitive.txt
+sensitive_file_mode: "0640"
+shadow_file_mode: "0640"
+sshd_config_mode: "0644"

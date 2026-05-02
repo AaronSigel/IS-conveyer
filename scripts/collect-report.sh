@@ -7,10 +7,11 @@ ARTIFACTS_DIR="${PROJECT_ROOT}/artifacts"
 
 HOSTS="target1,target2"
 OUTPUT_PREFIX=""
+OUTPUT_DIR=""
 
 usage() {
   cat <<'EOF'
-Usage: ./scripts/collect-report.sh [--hosts target1,target2] [--output-prefix prefix]
+Usage: ./scripts/collect-report.sh [--hosts target1,target2] [--output-prefix prefix] [--output-dir dir]
 
 Exports normalized findings and builds a markdown report from ready scan data.
 EOF
@@ -26,6 +27,10 @@ while (($# > 0)); do
       OUTPUT_PREFIX="$2"
       shift 2
       ;;
+    --output-dir)
+      OUTPUT_DIR="$2"
+      shift 2
+      ;;
     -h|--help)
       usage
       exit 0
@@ -38,7 +43,13 @@ while (($# > 0)); do
   esac
 done
 
-if [[ -n "${OUTPUT_PREFIX}" ]]; then
+if [[ -n "${OUTPUT_DIR}" ]]; then
+  mkdir -p "${OUTPUT_DIR}/raw"
+  UNIFIED_PATH="${OUTPUT_DIR}/unified-findings.json"
+  RAW_ALERTS_PATH="${OUTPUT_DIR}/raw/wazuh-sca.json"
+  RAW_VULNS_PATH="${OUTPUT_DIR}/raw/wazuh-vulnerabilities.json"
+  REPORT_PATH="${OUTPUT_DIR}/draft-report.md"
+elif [[ -n "${OUTPUT_PREFIX}" ]]; then
   NORMALIZED_PREFIX="${OUTPUT_PREFIX#-}"
   NORMALIZED_PREFIX="${NORMALIZED_PREFIX%-}"
   if [[ -z "${NORMALIZED_PREFIX}" ]]; then
@@ -64,8 +75,14 @@ python3 scripts/export-findings.py \
   --raw-alerts-output "${RAW_ALERTS_PATH}" \
   --raw-vulns-output "${RAW_VULNS_PATH}"
 
+if [[ -n "${OUTPUT_DIR}" ]]; then
+  cp "${RAW_ALERTS_PATH}" "${OUTPUT_DIR}/raw/syscollector-packages.json"
+fi
+
 python3 scripts/generate-report.py \
-  --input "${UNIFIED_PATH}" \
+  --findings "${UNIFIED_PATH}" \
+  --profile profiles/host-baseline-v1.yml \
+  --metadata config/report-metadata.yml \
   --output "${REPORT_PATH}"
 
 echo "unified findings: ${UNIFIED_PATH}"

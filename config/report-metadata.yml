@@ -1,0 +1,37 @@
+report:
+  id: "IS-CONVEYER-REPORT-2026-001"
+  title: "Отчёт о результатах проверки защищённости хостов"
+  object_name: "Тестовый стенд информационной системы"
+  scope: "Системное ПО хостов Ubuntu 24.04"
+  purpose: "Проверка соответствия конфигурации хостов базовому профилю информационной безопасности"
+  passport_basis: "ГОСТ Р 56545-2015"
+
+assessment:
+  limitations:
+    - "Проверка не включает web application scanning."
+    - "Проверка не включает network penetration testing."
+    - "Проверка не включает cloud posture assessment."
+    - "Проверка ограничена уровнем системного ПО хоста."
+
+stand:
+  hosts:
+    - name: "wazuh"
+      ip: "192.168.56.10"
+      role: "Wazuh manager / indexer / dashboard"
+      os: "Ubuntu 24.04"
+    - name: "target1"
+      ip: "192.168.56.11"
+      role: "Проверяемый хост"
+      os: "Ubuntu 24.04"
+    - name: "target2"
+      ip: "192.168.56.12"
+      role: "Проверяемый хост"
+      os: "Ubuntu 24.04"
+
+tools:
+  - name: "Wazuh"
+    purpose: "SCA, syscollector, vulnerability detection"
+  - name: "Ansible"
+    purpose: "Развёртывание и конфигурирование стенда"
+  - name: "Vagrant / VirtualBox"
+    purpose: "Локальная виртуальная инфраструктура"

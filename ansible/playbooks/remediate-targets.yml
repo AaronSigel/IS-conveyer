@@ -1,0 +1,21 @@
+---
+- name: Remediate target hosts to compliant state
+  hosts: targets
+  become: true
+  vars_files:
+    - ../group_vars/all.yml
+  vars:
+    target_baseline_apply_remediation: true
+    target_security_state: compliant
+    ssh_permit_root_login: "no"
+    ssh_password_authentication: "no"
+    firewall_enabled: true
+    forbidden_packages:
+      - telnet
+      - telnetd
+      - rsh-redone-client
+    sensitive_file_path: /tmp/demo-sensitive.txt
+    sensitive_file_mode: "0640"
+  roles:
+    - role: target_baseline
+    - role: target_state

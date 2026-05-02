@@ -12,6 +12,8 @@ import urllib.request
 from collections import Counter
 from urllib.error import HTTPError, URLError
 
+import yaml
+
 
 PROJECT_ROOT = pathlib.Path(__file__).resolve().parents[1]
 ARTIFACTS_DIR = PROJECT_ROOT / "artifacts"
@@ -20,48 +22,44 @@ DEFAULT_ALERTS_OUTPUT = ARTIFACTS_DIR / "raw-wazuh-alerts.json"
 DEFAULT_VULNS_OUTPUT = ARTIFACTS_DIR / "raw-wazuh-vulnerabilities.json"
 CREDS_PATH = ARTIFACTS_DIR / "wazuh-credentials.env"
 SCHEMA_PATH = PROJECT_ROOT / "report" / "schema" / "finding.schema.json"
+PROFILE_PATH = PROJECT_ROOT / "profiles" / "host-baseline-v1.yml"
 
 DEFAULT_TARGETS = ("target1", "target2")
 SCA_POLICY_ID = "host-baseline-v1"
 DEFAULT_VAGRANT_PRIVATE_KEY = os.environ.get("VAGRANT_INSECURE_PRIVATE_KEY", "~/.vagrant.d/insecure_private_key")
-SCA_RULES = {
-    10001: {
-        "rule_id": "ssh-permit-root-login-disabled",
-        "title": "PermitRootLogin disabled",
-        "category": "configuration",
-        "severity": "high",
-    },
-    10002: {
-        "rule_id": "ssh-password-authentication-disabled",
-        "title": "PasswordAuthentication disabled",
-        "category": "configuration",
-        "severity": "high",
-    },
-    10003: {
-        "rule_id": "package-telnet-absent",
-        "title": "Telnet package absent",
-        "category": "software",
-        "severity": "medium",
-    },
-    10004: {
-        "rule_id": "firewall-enabled",
-        "title": "Firewall enabled",
-        "category": "configuration",
-        "severity": "high",
-    },
-    10005: {
-        "rule_id": "sensitive-file-permissions-restricted",
-        "title": "Sensitive file permissions restricted",
-        "category": "configuration",
-        "severity": "medium",
-    },
-    10006: {
-        "rule_id": "package-rsh-redone-client-absent",
-        "title": "rsh-redone-client package absent",
-        "category": "software",
-        "severity": "medium",
-    },
-}
+DENYLIST_PACKAGES = ("telnet", "telnetd", "rsh-client", "rsh-redone-client", "rsh-server", "vsftpd", "proftpd", "pure-ftpd")
+
+
+def load_profile(path=PROFILE_PATH):
+    profile = yaml.safe_load(path.read_text(encoding="utf-8"))
+    sca_rules = {}
+    for check in profile.get("checks", []):
+        sca_check_id = check.get("sca_check_id")
+        if sca_check_id is None:
+            continue
+        sca_rules[int(sca_check_id)] = {
+            "rule_id": check["id"],
+            "title": check["title"],
+            "category": check["category"],
+            "severity": check["severity"],
+            "remediation": check["remediation"],
+        }
+
+    vulnerability_rules = {}
+    for item in profile.get("vulnerabilities", []) or []:
+        cve_id = str(item["cve"]).upper()
+        packages = item.get("packages") or []
+        vulnerability_rules[cve_id] = {
+            "rule_id": item["id"],
+            "cve": cve_id,
+            "title": item["title"],
+            "severity": item["severity"],
+            "remediation": item["remediation"],
+            "packages": {package.lower() for package in packages},
+            "cvss": item.get("cvss") or {},
+        }
+
+    return sca_rules, vulnerability_rules
 
 
 def load_env_file(path):
@@ -211,6 +209,7 @@ def normalize_severity(value):
         "high": "high",
         "medium": "medium",
         "low": "low",
+        "info": "info",
     }
     return mapping.get((value or "").strip().lower(), "medium")
 
@@ -232,7 +231,7 @@ def build_inventory_lookup(client, targets):
 
 
 def fetch_sca_checks(client, agent_id):
-    response = client.get(f"/sca/{agent_id}/checks/{SCA_POLICY_ID}", params={"limit": 50})
+    response = client.get(f"/sca/{agent_id}/checks/{SCA_POLICY_ID}", params={"limit": 100})
     return response.get("data", {}).get("affected_items", []), response
 
 
@@ -246,10 +245,10 @@ def fetch_syscollector_packages(client, agent_id, package_name):
     return response.get("data", {}).get("affected_items", []), response
 
 
-def normalize_sca_findings(host, sca_checks):
+def normalize_sca_findings(host, sca_checks, sca_rules):
     findings = []
     for item in sca_checks:
-        rule_meta = SCA_RULES.get(item.get("id"))
+        rule_meta = sca_rules.get(item.get("id"))
         if not rule_meta:
             continue
         status = normalize_sca_result(item.get("result"))
@@ -267,25 +266,28 @@ def normalize_sca_findings(host, sca_checks):
         findings.append(
             {
                 "host": host,
-                "source": "wazuh-api-sca",
+                "source": "wazuh_sca",
                 "category": rule_meta["category"],
                 "rule_id": rule_meta["rule_id"],
                 "title": rule_meta["title"],
                 "severity": rule_meta["severity"],
                 "status": status,
                 "evidence": evidence or [f"SCA result: {item.get('result', 'unknown')}"],
-                "remediation": item.get("remediation") or "Apply the required baseline setting.",
+                "remediation": item.get("remediation") or rule_meta["remediation"],
             }
         )
     return findings
 
 
-def fetch_vulnerabilities(indexer, hosts):
+def fetch_vulnerabilities(indexer, hosts, vulnerability_rules):
     page_size = 500
     collected_hits = []
     total = None
     pages = 0
     search_after = None
+    tracked_cves = sorted(vulnerability_rules)
+    if not tracked_cves:
+        return [], {"skipped": "no configured vulnerabilities", "hits": {"total": 0, "hits": []}}
 
     while True:
         body = {
@@ -296,8 +298,11 @@ def fetch_vulnerabilities(indexer, hosts):
                 {"_id": {"order": "asc"}},
             ],
             "query": {
-                "terms": {
-                    "agent.name": list(hosts),
+                "bool": {
+                    "filter": [
+                        {"terms": {"agent.name": list(hosts)}},
+                        {"terms": {"vulnerability.id": tracked_cves}},
+                    ]
                 }
             },
         }
@@ -322,7 +327,7 @@ def fetch_vulnerabilities(indexer, hosts):
     return collected_hits, {"pages": pages, "hits": {"total": total, "hits": collected_hits}}
 
 
-def normalize_vulnerability_findings(vulnerability_hits, targets):
+def normalize_vulnerability_findings(vulnerability_hits, targets, vulnerability_rules):
     findings = []
     for hit in vulnerability_hits:
         source = hit.get("_source", {})
@@ -335,33 +340,104 @@ def normalize_vulnerability_findings(vulnerability_hits, targets):
 
         package_name = package.get("name", "unknown-package")
         package_version = package.get("version", "unknown-version")
-        cve_id = vulnerability.get("id", hit.get("_id", "unknown-vulnerability"))
+        cve_id = str(vulnerability.get("id", hit.get("_id", "unknown-vulnerability"))).upper()
+        rule_meta = vulnerability_rules.get(cve_id)
+        if not rule_meta:
+            continue
+        if rule_meta["packages"] and package_name.lower() not in rule_meta["packages"]:
+            continue
+
         evidence = [
             f"Package: {package_name} {package_version}",
             f"CVE: {cve_id}",
         ]
         if vulnerability.get("severity"):
             evidence.append(f"Severity: {vulnerability['severity']}")
+        cvss = {}
         if vulnerability.get("score", {}).get("base") is not None:
+            cvss["base_score"] = vulnerability["score"]["base"]
             evidence.append(f"CVSS base: {vulnerability['score']['base']}")
+        elif rule_meta["cvss"].get("base_score") is not None:
+            cvss["base_score"] = rule_meta["cvss"]["base_score"]
+            evidence.append(f"CVSS base: {rule_meta['cvss']['base_score']}")
+        if vulnerability.get("score", {}).get("vector"):
+            cvss["vector"] = vulnerability["score"]["vector"]
+        elif rule_meta["cvss"].get("vector"):
+            cvss["vector"] = rule_meta["cvss"]["vector"]
         if vulnerability.get("published_at"):
             evidence.append(f"Published: {vulnerability['published_at']}")
         if vulnerability.get("detected_at"):
             evidence.append(f"Detected: {vulnerability['detected_at']}")
 
-        findings.append(
-            {
+        finding = {
+            "host": host,
+            "source": "wazuh-indexer-vulnerabilities",
+            "category": "vulnerability",
+            "rule_id": rule_meta["rule_id"],
+            "title": rule_meta["title"],
+            "severity": rule_meta["severity"],
+            "status": "fail",
+            "evidence": evidence,
+            "remediation": rule_meta["remediation"],
+            "finding_type": "software_vulnerability",
+            "external_ids": {"cve": cve_id},
+            "cve": cve_id,
+            "affected_component": {
+                "package": package_name,
+                "version": package_version,
+            },
+        }
+        if cvss:
+            finding["cvss"] = cvss
+        findings.append(finding)
+    return findings
+
+
+def build_vulnerability_pass_findings(targets, vulnerability_rules, failed_findings):
+    failed_keys = {
+        (finding["host"], finding["rule_id"])
+        for finding in failed_findings
+        if finding.get("status") == "fail"
+    }
+    findings = []
+    for host in targets:
+        for rule_meta in vulnerability_rules.values():
+            if (host, rule_meta["rule_id"]) in failed_keys:
+                continue
+
+            packages = sorted(rule_meta["packages"])
+            evidence = [
+                f"CVE: {rule_meta['cve']}",
+                "No matching Wazuh vulnerability state found for this host and rule.",
+            ]
+            if rule_meta["cvss"].get("base_score") is not None:
+                evidence.append(f"CVSS base: {rule_meta['cvss']['base_score']}")
+            if packages:
+                evidence.append(f"Package: {', '.join(packages)}")
+
+            affected_component = {}
+            if packages:
+                affected_component["package"] = ", ".join(packages)
+
+            finding = {
                 "host": host,
                 "source": "wazuh-indexer-vulnerabilities",
                 "category": "vulnerability",
-                "rule_id": f"{cve_id}:{package_name}",
-                "title": f"{cve_id} affects package {package_name}",
-                "severity": normalize_severity(vulnerability.get("severity")),
-                "status": "fail",
+                "rule_id": rule_meta["rule_id"],
+                "title": rule_meta["title"],
+                "severity": rule_meta["severity"],
+                "status": "pass",
                 "evidence": evidence,
-                "remediation": f"Update or remove package {package_name} {package_version} to remediate {cve_id}.",
+                "remediation": rule_meta["remediation"],
+                "finding_type": "software_vulnerability",
+                "external_ids": {"cve": rule_meta["cve"]},
+                "cve": rule_meta["cve"],
             }
-        )
+            if rule_meta["cvss"]:
+                finding["cvss"] = rule_meta["cvss"]
+            if affected_component:
+                finding["affected_component"] = affected_component
+            findings.append(finding)
     return findings
 
 
@@ -373,6 +449,7 @@ def main():
     parser.add_argument("--hosts", default=",".join(DEFAULT_TARGETS))
     args = parser.parse_args()
     targets = parse_hosts(args.hosts)
+    sca_rules, vulnerability_rules = load_profile()
 
     creds = load_env_file(CREDS_PATH)
     required = ("WAZUH_API_URL", "WAZUH_API_USER", "WAZUH_API_PASSWORD")
@@ -410,23 +487,25 @@ def main():
 
         sca_checks, sca_response = fetch_sca_checks(client, agent_id)
         raw_api["sca"][host] = sca_response
-        findings.extend(normalize_sca_findings(host, sca_checks))
+        findings.extend(normalize_sca_findings(host, sca_checks, sca_rules))
 
         os_items, os_response = fetch_syscollector_os(client, agent_id)
         raw_api["syscollector_os"][host] = os_response
 
         raw_api["syscollector_packages"][host] = {}
-        for package_name in ("telnet", "rsh-redone-client"):
+        for package_name in DENYLIST_PACKAGES:
             package_items, package_response = fetch_syscollector_packages(client, agent_id, package_name)
             raw_api["syscollector_packages"][host][package_name] = package_response
 
     if indexer is not None:
         try:
-            vulnerability_hits, vulnerability_response = fetch_vulnerabilities(indexer, targets)
+            vulnerability_hits, vulnerability_response = fetch_vulnerabilities(indexer, targets, vulnerability_rules)
         except HTTPError as exc:
             raise RuntimeError(f"Failed to query Wazuh indexer vulnerability data: HTTP {exc.code}") from exc
         raw_vulnerabilities["indexer"] = vulnerability_response
-        findings.extend(normalize_vulnerability_findings(vulnerability_hits, targets))
+        vulnerability_findings = normalize_vulnerability_findings(vulnerability_hits, targets, vulnerability_rules)
+        findings.extend(vulnerability_findings)
+        findings.extend(build_vulnerability_pass_findings(targets, vulnerability_rules, vulnerability_findings))
 
     findings = deduplicate(findings)
     findings.sort(key=lambda item: (item["host"], item["status"] != "fail", item["category"], item["rule_id"]))

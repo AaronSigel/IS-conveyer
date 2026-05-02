@@ -1,0 +1,34 @@
+---
+target_security_state: vulnerable
+
+ssh_permit_root_login: "yes"
+ssh_password_authentication: "yes"
+ssh_permit_empty_passwords: "yes"
+ssh_x11_forwarding: "yes"
+ssh_max_auth_tries: 6
+
+firewall_enabled: false
+
+forbidden_packages:
+  - telnet
+  - rsh-redone-client
+  - vsftpd
+
+vulnerable_package_versions:
+  - curl=8.5.0-2ubuntu10
+  - libcurl4t64=8.5.0-2ubuntu10
+  - libcurl3t64-gnutls=8.5.0-2ubuntu10
+  - sudo=1.9.15p5-3ubuntu5
+  - vim=2:9.1.0016-1ubuntu7
+  - vim-common=2:9.1.0016-1ubuntu7
+  - vim-runtime=2:9.1.0016-1ubuntu7
+  - openssl=3.0.13-0ubuntu3
+  - libssl3t64=3.0.13-0ubuntu3
+  - openssh-server=1:9.6p1-3ubuntu13
+  - openssh-client=1:9.6p1-3ubuntu13
+  - openssh-sftp-server=1:9.6p1-3ubuntu13
+
+sensitive_file_path: /tmp/demo-sensitive.txt
+sensitive_file_mode: "0777"
+shadow_file_mode: "0644"
+sshd_config_mode: "0666"

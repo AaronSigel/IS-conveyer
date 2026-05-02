@@ -1,0 +1,79 @@
+---
+- name: Ensure audit and time sync packages are installed on compliant host
+  ansible.builtin.apt:
+    name:
+      - auditd
+      - systemd-timesyncd
+      - rsyslog
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+  when: target_security_state == "compliant"
+
+- name: Ensure auditd is enabled and running on compliant host
+  ansible.builtin.systemd:
+    name: auditd
+    enabled: true
+    state: started
+  when: target_security_state == "compliant"
+
+- name: Ensure rsyslog is enabled and running on compliant host
+  ansible.builtin.systemd:
+    name: rsyslog
+    enabled: true
+    state: started
+  when: target_security_state == "compliant"
+
+- name: Ensure time synchronization is enabled on compliant host
+  ansible.builtin.command:
+    cmd: timedatectl set-ntp true
+  changed_when: false
+  when: target_security_state == "compliant"
+
+- name: Ensure time synchronization service is running on compliant host
+  ansible.builtin.systemd:
+    name: systemd-timesyncd
+    enabled: true
+    state: started
+  when: target_security_state == "compliant"
+
+- name: Stop and disable auditd on vulnerable host
+  ansible.builtin.systemd:
+    name: auditd
+    enabled: false
+    state: stopped
+  failed_when: false
+  when: target_security_state == "vulnerable"
+
+- name: Remove auditd package on vulnerable host
+  ansible.builtin.apt:
+    name: auditd
+    state: absent
+    purge: true
+  when: target_security_state == "vulnerable"
+
+- name: Stop and disable rsyslog on vulnerable host
+  ansible.builtin.systemd:
+    name: rsyslog
+    enabled: false
+    state: stopped
+  failed_when: false
+  when: target_security_state == "vulnerable"
+
+- name: Stop and disable time sync services on vulnerable host
+  ansible.builtin.systemd:
+    name: "{{ item }}"
+    enabled: false
+    state: stopped
+  loop:
+    - systemd-timesyncd
+    - chrony
+  failed_when: false
+  when: target_security_state == "vulnerable"
+
+- name: Ensure timedatectl NTP flag is disabled on vulnerable host
+  ansible.builtin.command:
+    cmd: timedatectl set-ntp false
+  changed_when: false
+  failed_when: false
+  when: target_security_state == "vulnerable"

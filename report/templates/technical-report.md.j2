@@ -1,0 +1,147 @@
+# {{ report_title }}
+
+## 0 СВЕДЕНИЯ ОБ ОТЧЁТЕ
+
+| Поле | Значение |
+|---|---|
+| Идентификатор отчёта | {{ report.id|md }} |
+| Дата формирования | {{ report.generated_at|md }} |
+| Объект проверки | {{ report.object_name|md }} |
+| Профиль проверки | {{ report.profile|md }} |
+| Источник результатов | {{ report.sources|md }} |
+| Формат представления результатов | {{ report.format|md }} |
+| Основа формата паспорта | {{ report.passport_basis|md }} |
+| Количество включённых паспортов | {{ report.passports_count }} |
+
+## 1 ОБЩИЕ СВЕДЕНИЯ О ПРОВЕРКЕ
+
+### 1.1 Цель проверки
+
+{{ purpose }}
+
+### 1.2 Объект проверки
+
+{{ report.object_name }}
+
+### 1.3 Область проверки
+
+{{ scope }}
+
+### 1.4 Ограничения проверки
+
+{% for item in limitations %}
+- {{ item }}
+{% endfor %}
+
+### 1.5 Применённые фильтры отчёта
+
+{{ filter_text }}
+
+## 2 СВЕДЕНИЯ ОБ ОБЪЕКТЕ ПРОВЕРКИ
+
+### 2.1 Проверяемые хосты
+
+| Хост | IP-адрес | Назначение | ОС |
+|---|---:|---|---|
+{% for host in hosts %}
+| {{ host.name|default("не определено")|md }} | {{ host.ip|default("не определено")|md }} | {{ host.role|default("не определено")|md }} | {{ host.os|default("не определено")|md }} |
+{% endfor %}
+
+### 2.2 Состав стенда
+
+{% if stand_hosts %}
+{% for host in stand_hosts %}
+- `{{ host.name|default("не определено") }}`{% if host.ip %} ({{ host.ip }}){% endif %}: {{ host.role|default("не определено") }}, {{ host.os|default("не определено") }}
+{% endfor %}
+{% else %}
+Состав стенда в metadata не задан.
+{% endif %}
+
+### 2.3 Используемые средства проверки
+
+| Средство | Назначение |
+|---|---|
+{% for tool in tools %}
+| {{ tool.name|default("не определено")|md }} | {{ tool.purpose|default("не определено")|md }} |
+{% endfor %}
+
+## 3 МЕТОДИКА ПРОВЕДЕНИЯ ПРОВЕРКИ
+
+### 3.1 Источники данных
+
+| Источник | Назначение |
+|---|---|
+| Wazuh SCA | Проверка конфигурации хоста |
+| Wazuh syscollector | Инвентаризация пакетов, ОС и компонентов |
+| Wazuh Vulnerability Detector | Выявление уязвимых пакетов |
+
+### 3.2 Профиль проверки
+
+Профиль проверки: `{{ report.profile }}`.
+
+### 3.3 Критерии включения результатов в отчёт
+
+В отчёт включаются findings, соответствующие применённым фильтрам.
+
+### 3.4 Правила нормализации результатов
+
+Результаты Wazuh приводятся к единой структуре finding.
+
+### 3.5 Правила формирования паспортов
+
+Для каждого finding, прошедшего фильтрацию, формируется паспорт выявленной уязвимости / несоответствия.
+
+## 4 ОБОБЩЁННЫЕ РЕЗУЛЬТАТЫ ПРОВЕРКИ
+
+### 4.1 Количество проверенных хостов
+
+Проверено хостов: {{ summary.hosts_count }}.
+
+### 4.2 Количество выявленных уязвимостей и несоответствий
+
+Количество включённых результатов: {{ summary.selected_findings_count }}.
+
+### 4.3 Распределение по уровням опасности
+
+| Показатель | Значение |
+|---|---:|
+| Проверено хостов | {{ summary.hosts_count }} |
+| Количество включённых результатов | {{ summary.selected_findings_count }} |
+| Critical | {{ summary.by_severity.critical }} |
+| High | {{ summary.by_severity.high }} |
+| Medium | {{ summary.by_severity.medium }} |
+| Low | {{ summary.by_severity.low }} |
+| Info | {{ summary.by_severity.info }} |
+| Уязвимости ПО | {{ summary.software_vulnerabilities }} |
+| Уязвимости конфигурации / несоответствия | {{ summary.configuration_findings }} |
+
+### 4.4 Распределение по категориям
+
+{% if summary.by_category %}
+| Категория | Количество |
+|---|---:|
+{% for category, count in summary.by_category.items() %}
+| {{ category|md }} | {{ count }} |
+{% endfor %}
+{% else %}
+По заданным критериям фильтрации уязвимости и несоответствия не выявлены.
+{% endif %}
+
+### 4.5 Итоговая оценка состояния
+
+{{ assessment_text }}
+
+## 5 ПАСПОРТА ВЫЯВЛЕННЫХ УЯЗВИМОСТЕЙ И НЕСООТВЕТСТВИЙ
+
+{% if rendered_passports %}
+{% for rendered_passport in rendered_passports %}
+{{ rendered_passport }}
+
+{% endfor %}
+{% else %}
+По заданным критериям фильтрации уязвимости и несоответствия не выявлены.
+{% endif %}
+
+## 6 ЗАКЛЮЧЕНИЕ
+
+{{ conclusion }}

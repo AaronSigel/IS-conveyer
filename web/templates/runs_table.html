@@ -1,0 +1,31 @@
+<div class="table-wrap">
+  <table>
+    <thead>
+      <tr>
+        <th>Дата</th><th>Run ID</th><th>Хосты</th><th>Статус</th><th>Total</th><th>Fail</th><th>High</th><th>Critical</th><th>Действия</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for run in runs %}
+      <tr>
+        <td>{{ run.started_at or run.id }}</td>
+        <td><a href="/scans/{{ run.id }}">{{ run.id }}</a></td>
+        <td>{{ ", ".join(run.hosts or []) }}</td>
+        <td><span class="status {{ run.status }}">{{ run.status }}</span></td>
+        <td>{{ run.summary.total }}</td>
+        <td>{{ run.summary.fail }}</td>
+        <td>{{ run.summary.high }}</td>
+        <td>{{ run.summary.critical }}</td>
+        <td class="actions">
+          <a href="/reports/{{ run.id }}">отчёт</a>
+          <a href="/scans/{{ run.id }}/logs">лог</a>
+          <a href="/reports/{{ run.id }}/json">JSON</a>
+          <a href="/reports/{{ run.id }}#exports">экспорты</a>
+        </td>
+      </tr>
+    {% else %}
+      <tr><td colspan="9" class="empty">Запусков пока нет.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>

@@ -1,0 +1,31 @@
+sca_rules:
+  - id: SSH_X11_FORWARDING_DISABLED
+    title: Запрет X11 forwarding
+    description_ru: X11 forwarding расширяет поверхность атаки SSH-сессий и должен быть отключён на серверных хостах.
+    impact_ru: Возможность перенаправления X11-сеансов и расширение канала воздействия через SSH.
+    remediation_ru: Set `X11Forwarding no` in sshd configuration and restart SSH.
+    verification_command: sshd -T | grep -i '^x11forwarding no$'
+    expected_result: Команда возвращает строку `x11forwarding no`.
+    references:
+      - CIS Ubuntu Linux 24.04 LTS Benchmark, SSH server configuration
+  - id: AUDITD_INSTALLED
+    title: auditd установлен
+    description_ru: auditd обеспечивает сбор событий аудита безопасности на Linux-хосте.
+    impact_ru: Без auditd снижается полнота журналирования и усложняется расследование инцидентов.
+    remediation_ru: Install the `auditd` package.
+    verification_command: dpkg -s auditd
+    expected_result: Пакет auditd установлен, команда завершается успешно.
+    references:
+      - CIS Ubuntu Linux 24.04 LTS Benchmark, auditd
+
+cves:
+  - id: VULN_SUDO_CVE_2025_32463
+    cve: CVE-2025-32463
+    title: Sudo chroot option local privilege escalation
+    description_ru: Уязвимость sudo позволяет локальному пользователю повысить привилегии при уязвимой версии пакета.
+    impact_ru: Локальное повышение привилегий до root на затронутом хосте.
+    remediation_ru: Update sudo to the fixed Ubuntu 24.04 package version or later.
+    verification_command: dpkg-query -W -f='${Version}\n' sudo
+    expected_result: Установленная версия sudo соответствует исправленной версии дистрибутива или новее.
+    references:
+      - https://www.sudo.ws/security/advisories/

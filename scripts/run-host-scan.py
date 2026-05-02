@@ -45,6 +45,15 @@ def iso_now():
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
+def parse_wazuh_time(value):
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+
 class WazuhApiClient:
     def __init__(self, base_url, username, password):
         self.base_url = base_url.rstrip("/")
@@ -121,7 +130,8 @@ def build_runtime_inventory():
         "ansible_host=127.0.0.1",
         f"ansible_host={windows_host_ip}",
     )
-    inventory_text += f"\nansible_ssh_private_key_file={os.environ.get('VAGRANT_INSECURE_PRIVATE_KEY', '')}\n"
+    vagrant_key = os.environ.get("VAGRANT_INSECURE_PRIVATE_KEY") or "~/.vagrant.d/insecure_private_key"
+    inventory_text += f"\nansible_ssh_private_key_file={vagrant_key}\n"
     runtime_inventory = ARTIFACTS_DIR / "runtime-hosts.ini"
     runtime_inventory.write_text(inventory_text, encoding="utf-8")
     return runtime_inventory
@@ -137,10 +147,16 @@ def agent_inventory(client, hosts):
     return {item["name"]: item for item in items if item.get("name") in hosts}
 
 
-def sca_ready(client, agent_id):
-    response = client.get(f"/sca/{agent_id}/checks/{SCA_POLICY_ID}", params={"limit": 100})
+def sca_ready(client, agent_id, scan_started_at):
+    response = client.get(f"/sca/{agent_id}", params={"limit": 100})
     items = response.get("data", {}).get("affected_items", [])
-    return len(items) > 0
+    for item in items:
+        if item.get("policy_id") != SCA_POLICY_ID:
+            continue
+        end_scan = parse_wazuh_time(item.get("end_scan"))
+        if end_scan and end_scan >= scan_started_at:
+            return True
+    return False
 
 
 def syscollector_packages_ready(client, agent_id):
@@ -149,7 +165,7 @@ def syscollector_packages_ready(client, agent_id):
     return len(items) > 0
 
 
-def wait_for_scan_data(client, hosts, timeout, interval):
+def wait_for_scan_data(client, hosts, timeout, interval, scan_started_at):
     deadline = time.time() + timeout
     pending = set(hosts)
 
@@ -164,7 +180,7 @@ def wait_for_scan_data(client, hosts, timeout, interval):
                 continue
 
             agent_id = agent["id"]
-            if not sca_ready(client, agent_id):
+            if not sca_ready(client, agent_id, scan_started_at):
                 still_pending.add(host)
                 continue
             if not syscollector_packages_ready(client, agent_id):
@@ -220,7 +236,8 @@ def main():
 
     hosts = parse_hosts(args.hosts)
 
-    print(f"scan started at {iso_now()}")
+    scan_started_at = datetime.now(timezone.utc).replace(microsecond=0)
+    print(f"scan started at {scan_started_at.isoformat().replace('+00:00', 'Z')}")
     print(f"hosts: {', '.join(hosts)}")
     creds = load_required_credentials()
 
@@ -246,7 +263,7 @@ def main():
             raise
         creds = load_required_credentials()
         client = build_api_client(creds)
-    wait_for_scan_data(client, hosts, args.timeout, args.poll_interval)
+    wait_for_scan_data(client, hosts, args.timeout, args.poll_interval, scan_started_at)
 
     scan_label = build_output_paths(args.output_prefix)
     if scan_label:

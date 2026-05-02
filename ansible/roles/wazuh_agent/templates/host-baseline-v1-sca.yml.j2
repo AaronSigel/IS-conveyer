@@ -2,55 +2,204 @@ policy:
   id: "host-baseline-v1"
   file: "host-baseline-v1-sca.yml"
   name: "Custom host baseline for ib-host-audit-poc"
-  description: "Minimal executable subset of the local host baseline profile."
+  description: "Extended Ubuntu 24.04 host baseline implemented with Wazuh SCA."
   references:
     - "profiles/host-baseline-v1.yml"
 
 checks:
   - id: 10001
-    title: "PermitRootLogin is disabled"
+    title: "Запрет входа root по SSH"
     description: "The effective SSH daemon configuration must disable root login."
-    remediation: "Set PermitRootLogin to no and restart ssh."
+    rationale: "Direct root SSH login increases privileged account compromise risk."
+    remediation: "Set PermitRootLogin to no and restart SSH."
+    compliance:
+      - custom: ["SSH_ROOT_LOGIN_DISABLED"]
     condition: all
     rules:
       - 'c:sshd -T -> r:^permitrootlogin no$'
 
   - id: 10002
-    title: "PasswordAuthentication is disabled"
+    title: "Запрет парольной аутентификации по SSH"
     description: "The effective SSH daemon configuration must disable password authentication."
-    remediation: "Set PasswordAuthentication to no and restart ssh."
+    rationale: "Password authentication is susceptible to brute-force attacks."
+    remediation: "Set PasswordAuthentication to no and restart SSH."
+    compliance:
+      - custom: ["SSH_PASSWORD_AUTH_DISABLED"]
     condition: all
     rules:
       - 'c:sshd -T -> r:^passwordauthentication no$'
 
   - id: 10003
-    title: "Telnet package is absent"
-    description: "The telnet package must not be installed."
-    remediation: "Remove the telnet package."
+    title: "Запрет входа пользователей с пустым паролем"
+    description: "The effective SSH daemon configuration must reject empty passwords."
+    rationale: "Empty passwords allow access without an authentication secret."
+    remediation: "Set PermitEmptyPasswords to no and restart SSH."
+    compliance:
+      - custom: ["SSH_EMPTY_PASSWORDS_DISABLED"]
+    condition: all
+    rules:
+      - 'c:sshd -T -> r:^permitemptypasswords no$'
+
+  - id: 10004
+    title: "Запрет X11 forwarding"
+    description: "The effective SSH daemon configuration must disable X11 forwarding."
+    rationale: "X11 forwarding expands the SSH session attack surface."
+    remediation: "Set X11Forwarding to no and restart SSH."
+    compliance:
+      - custom: ["SSH_X11_FORWARDING_DISABLED"]
+    condition: all
+    rules:
+      - 'c:sshd -T -> r:^x11forwarding no$'
+
+  - id: 10005
+    title: "Ограничение количества попыток входа по SSH"
+    description: "The effective SSH daemon configuration must limit authentication attempts to 4."
+    rationale: "Authentication attempt limits reduce brute-force effectiveness."
+    remediation: "Set MaxAuthTries to 4 and restart SSH."
+    compliance:
+      - custom: ["SSH_MAX_AUTH_TRIES_LIMITED"]
+    condition: all
+    rules:
+      - 'c:sshd -T -> r:^maxauthtries 4$'
+
+  - id: 10010
+    title: "Включён UFW firewall"
+    description: "The UFW service must be active."
+    rationale: "A local firewall limits host network exposure."
+    remediation: "Install UFW if needed and run ufw --force enable."
+    compliance:
+      - custom: ["FIREWALL_UFW_ENABLED"]
+    condition: all
+    rules:
+      - 'c:systemctl is-active ufw -> r:^active$'
+
+  - id: 10011
+    title: "Политика входящих соединений deny by default"
+    description: "UFW must deny incoming connections by default."
+    rationale: "Default deny prevents accidental exposure of listening services."
+    remediation: "Run ufw default deny incoming and allow only required services."
+    compliance:
+      - custom: ["FIREWALL_DEFAULT_DENY_INCOMING"]
+    condition: all
+    rules:
+      - 'c:ufw status verbose -> r:^Default: deny \(incoming\)'
+
+  - id: 10020
+    title: "Безопасные права на /etc/shadow"
+    description: "/etc/shadow must not be readable by regular users."
+    rationale: "The shadow file contains password hashes and must remain restricted."
+    remediation: "Set /etc/shadow permissions to 0640 or 0600."
+    compliance:
+      - custom: ["SHADOW_FILE_PERMISSIONS_SECURE"]
+    condition: any
+    rules:
+      - 'c:stat -c %a /etc/shadow -> r:^640$'
+      - 'c:stat -c %a /etc/shadow -> r:^600$'
+
+  - id: 10021
+    title: "Безопасные права на /etc/ssh/sshd_config"
+    description: "/etc/ssh/sshd_config must not be world-writable."
+    rationale: "World-writable SSH configuration permits unauthorized daemon changes."
+    remediation: "Remove world-write permission from /etc/ssh/sshd_config."
+    compliance:
+      - custom: ["SSHD_CONFIG_PERMISSIONS_SECURE"]
+    condition: any
+    rules:
+      - 'c:stat -c %a /etc/ssh/sshd_config -> r:^644$'
+      - 'c:stat -c %a /etc/ssh/sshd_config -> r:^640$'
+      - 'c:stat -c %a /etc/ssh/sshd_config -> r:^600$'
+
+  - id: 10022
+    title: "Безопасные права на demo sensitive file"
+    description: "/tmp/demo-sensitive.txt must not be readable or writable by regular users."
+    rationale: "World-accessible sensitive files can expose secrets or allow unauthorized modification."
+    remediation: "Set /tmp/demo-sensitive.txt permissions to 0640 and keep ownership restricted."
+    compliance:
+      - custom: ["DEMO_SENSITIVE_FILE_PERMISSIONS_SECURE"]
+    condition: any
+    rules:
+      - 'c:stat -c %a /tmp/demo-sensitive.txt -> r:^640$'
+      - 'c:stat -c %a /tmp/demo-sensitive.txt -> r:^600$'
+
+  - id: 10030
+    title: "Telnet не должен быть установлен"
+    description: "Telnet client and server packages must be absent."
+    rationale: "Telnet transmits traffic without encryption."
+    remediation: "Remove telnet and telnetd packages."
+    compliance:
+      - custom: ["TELNET_PACKAGE_ABSENT"]
     condition: all
     rules:
       - 'not c:dpkg -s telnet -> r:Status: install ok installed'
+      - 'not c:dpkg -s telnetd -> r:Status: install ok installed'
 
-  - id: 10004
-    title: "Firewall is enabled"
-    description: "UFW must be active on the endpoint."
-    remediation: "Install and enable ufw."
+  - id: 10031
+    title: "RSH не должен быть установлен"
+    description: "RSH client and server packages must be absent."
+    rationale: "RSH is an obsolete insecure remote access protocol."
+    remediation: "Remove rsh-client, rsh-redone-client, and rsh-server packages."
+    compliance:
+      - custom: ["RSH_PACKAGE_ABSENT"]
     condition: all
     rules:
-      - 'c:ufw status -> r:^Status: active$'
-
-  - id: 10005
-    title: "Sensitive file permissions are restricted"
-    description: "The demo sensitive file must not be world-readable."
-    remediation: "Set permissions on /etc/ib-host-audit-poc/demo-sensitive.conf to 0640 or stricter."
-    condition: all
-    rules:
-      - 'c:stat -c %a /etc/ib-host-audit-poc/demo-sensitive.conf -> n:(\d+) compare <= 640'
-
-  - id: 10006
-    title: "rsh-redone-client package is absent"
-    description: "The rsh-redone-client package must not be installed."
-    remediation: "Remove the rsh-redone-client package."
-    condition: all
-    rules:
+      - 'not c:dpkg -s rsh-client -> r:Status: install ok installed'
       - 'not c:dpkg -s rsh-redone-client -> r:Status: install ok installed'
+      - 'not c:dpkg -s rsh-server -> r:Status: install ok installed'
+
+  - id: 10032
+    title: "FTP-сервер не должен быть установлен"
+    description: "FTP server packages must be absent."
+    rationale: "FTP servers increase data and credential exposure risk unless explicitly required."
+    remediation: "Remove vsftpd, proftpd, and pure-ftpd packages."
+    compliance:
+      - custom: ["FTP_SERVER_ABSENT"]
+    condition: all
+    rules:
+      - 'not c:dpkg -s vsftpd -> r:Status: install ok installed'
+      - 'not c:dpkg -s proftpd -> r:Status: install ok installed'
+      - 'not c:dpkg -s pure-ftpd -> r:Status: install ok installed'
+
+  - id: 10040
+    title: "auditd установлен"
+    description: "The auditd package must be installed."
+    rationale: "auditd provides Linux security audit event collection."
+    remediation: "Install the auditd package."
+    compliance:
+      - custom: ["AUDITD_INSTALLED"]
+    condition: all
+    rules:
+      - 'c:dpkg -s auditd -> r:Status: install ok installed'
+
+  - id: 10041
+    title: "auditd включён"
+    description: "The auditd service must be enabled."
+    rationale: "auditd must start automatically to provide continuous audit coverage."
+    remediation: "Enable and start the auditd service."
+    compliance:
+      - custom: ["AUDITD_SERVICE_ENABLED"]
+    condition: all
+    rules:
+      - 'c:systemctl is-enabled auditd -> r:^enabled$'
+
+  - id: 10042
+    title: "rsyslog активен"
+    description: "The rsyslog service must be active."
+    rationale: "System logging supports security investigation and host state evidence."
+    remediation: "Install, enable, and start the rsyslog service."
+    compliance:
+      - custom: ["RSYSLOG_SERVICE_ACTIVE"]
+    condition: all
+    rules:
+      - 'c:systemctl is-active rsyslog -> r:^active$'
+
+  - id: 10050
+    title: "Синхронизация времени включена"
+    description: "Time synchronization must be active through timedatectl, chrony, or systemd-timesyncd."
+    rationale: "Accurate time is required for event correlation and audit trails."
+    remediation: "Enable systemd-timesyncd or chrony and verify NTP synchronization."
+    compliance:
+      - custom: ["TIME_SYNC_ENABLED"]
+    condition: any
+    rules:
+      - 'c:systemctl is-active chrony -> r:^active$'
+      - 'c:systemctl is-active systemd-timesyncd -> r:^active$'

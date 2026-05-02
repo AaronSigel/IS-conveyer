@@ -15,6 +15,17 @@
     - name: Gather facts after Python bootstrap
       ansible.builtin.setup:
 
+    - name: Configure apt network timeouts
+      ansible.builtin.copy:
+        dest: /etc/apt/apt.conf.d/99ib-host-audit-timeouts
+        owner: root
+        group: root
+        mode: "0644"
+        content: |
+          Acquire::Retries "2";
+          Acquire::http::Timeout "20";
+          Acquire::https::Timeout "20";
+
     - name: Free root filesystem space on fresh or partially installed Wazuh manager
       ansible.builtin.shell: |
         set -euo pipefail

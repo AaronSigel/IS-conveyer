@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}Статус проверки{% endblock %}
+{% block content %}
+<section class="page-head">
+  <div>
+    <h1>{{ run_id }}</h1>
+    <p><span class="status {{ metadata.status }}">{{ metadata.status }}</span> · {{ ", ".join(metadata.hosts or []) }}</p>
+  </div>
+  <a class="button" href="/scans/{{ run_id }}">Обновить</a>
+</section>
+<section class="metrics">
+  <div><b>Started</b><span>{{ metadata.started_at or "-" }}</span></div>
+  <div><b>Finished</b><span>{{ metadata.finished_at or "-" }}</span></div>
+  <div><b>Duration</b><span>{{ metadata.duration_seconds or "-" }} сек</span></div>
+  <div><b>Return code</b><span>{{ metadata.returncode if metadata.returncode is not none else "-" }}</span></div>
+</section>
+{% if metadata.status in ["succeeded", "failed", "timeout", "cancelled"] %}
+<div class="actions band">
+  <a class="button primary" href="/reports/{{ run_id }}">Открыть отчёт</a>
+  <a class="button" href="/reports/{{ run_id }}/json">Скачать unified-findings.json</a>
+  <a class="button" href="/reports/{{ run_id }}#exports">Открыть exports</a>
+</div>
+{% endif %}
+<section class="panel">
+  <h2>Лог</h2>
+  <pre id="log" class="log"></pre>
+</section>
+<script>
+async function loadLog() {
+  const response = await fetch("/scans/{{ run_id }}/logs");
+  document.getElementById("log").textContent = await response.text();
+}
+loadLog();
+setInterval(loadLog, 2500);
+</script>
+{% endblock %}

@@ -1,0 +1,23 @@
+---
+- name: Create demo sensitive file
+  ansible.builtin.copy:
+    dest: "{{ sensitive_file_path }}"
+    content: |
+      demo_secret=for_scan_demo_only
+    owner: root
+    group: root
+    mode: "{{ sensitive_file_mode }}"
+
+- name: Set /etc/shadow permissions for demo state
+  ansible.builtin.file:
+    path: /etc/shadow
+    owner: root
+    group: shadow
+    mode: "{{ shadow_file_mode }}"
+
+- name: Set sshd_config permissions for demo state
+  ansible.builtin.file:
+    path: /etc/ssh/sshd_config
+    owner: root
+    group: root
+    mode: "{{ sshd_config_mode }}"

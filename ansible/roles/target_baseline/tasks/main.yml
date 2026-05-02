@@ -29,8 +29,26 @@
   ansible.builtin.apt:
     name:
       - ufw
+      - rsyslog
     state: present
     update_cache: true
+    cache_valid_time: 3600
+
+- name: Install audit and time sync packages in compliant mode
+  ansible.builtin.apt:
+    name:
+      - auditd
+      - systemd-timesyncd
+    state: present
+  when: target_baseline_apply_remediation
+
+- name: Remove audit package in drift mode
+  ansible.builtin.apt:
+    name:
+      - auditd
+    state: absent
+    purge: true
+  when: not target_baseline_apply_remediation
 
 - name: Remove forbidden packages when remediation mode is enabled
   ansible.builtin.apt:
@@ -55,6 +73,9 @@
       # Managed by target_baseline role
       PermitRootLogin {{ 'no' if target_baseline_apply_remediation else 'yes' }}
       PasswordAuthentication {{ 'no' if target_baseline_apply_remediation else 'yes' }}
+      PermitEmptyPasswords {{ 'no' if target_baseline_apply_remediation else 'yes' }}
+      X11Forwarding {{ 'no' if target_baseline_apply_remediation else 'yes' }}
+      MaxAuthTries {{ '4' if target_baseline_apply_remediation else '6' }}
   notify: Restart ssh
 
 - name: Allow SSH through UFW before enabling the firewall
@@ -63,11 +84,37 @@
   when: target_baseline_apply_remediation
   changed_when: false
 
+- name: Set UFW default deny incoming policy in compliant mode
+  ansible.builtin.command:
+    cmd: ufw default deny incoming
+  when: target_baseline_apply_remediation
+  changed_when: false
+
 - name: Ensure UFW state matches the requested baseline mode
   ansible.builtin.command:
     cmd: "{{ 'ufw --force enable' if target_baseline_apply_remediation else 'ufw disable' }}"
   register: target_baseline_ufw_command
   changed_when: "'Firewall is active' in target_baseline_ufw_command.stdout or 'Firewall stopped' in target_baseline_ufw_command.stdout"
+
+- name: Ensure auditd service is enabled and running in compliant mode
+  ansible.builtin.systemd:
+    name: auditd
+    enabled: true
+    state: started
+  when: target_baseline_apply_remediation
+
+- name: Ensure rsyslog service is enabled and running
+  ansible.builtin.systemd:
+    name: rsyslog
+    enabled: true
+    state: started
+
+- name: Ensure time synchronization is enabled in compliant mode
+  ansible.builtin.systemd:
+    name: systemd-timesyncd
+    enabled: true
+    state: started
+  when: target_baseline_apply_remediation
 
 - name: Create sensitive file for SCA checks
   ansible.builtin.copy:

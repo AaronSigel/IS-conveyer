@@ -25,6 +25,13 @@
 - raw vulnerabilities сохраняются в `artifacts/raw-wazuh-vulnerabilities.json`;
 - черновой отчёт сохраняется в `artifacts/draft-report.md`;
 - findings формируются из `Wazuh API` и `Wazuh indexer`.
+- SCA findings включают SSH hardening, firewall, file permissions, denylist packages, audit/logging и time sync.
+
+Профиль можно проверить до запуска стенда:
+
+```bash
+python scripts/validate-profile.py profiles/host-baseline-v1.yml
+```
 
 ## Сценарий 2a. Отдельный отчёт по выбранному хосту
 
@@ -51,6 +58,27 @@
 - количество findings со статусом `fail` уменьшается;
 - по исправленным правилам появляются `pass`;
 - обновлённый markdown-отчёт отражает re-scan.
+
+Сценарий `drifting`, который используется по умолчанию, намеренно включает:
+
+- `PermitRootLogin yes`, `PasswordAuthentication yes`, `PermitEmptyPasswords yes`, `X11Forwarding yes`, `MaxAuthTries 6`;
+- выключенный UFW;
+- установку denylist-пакетов на отдельных targets;
+- отсутствие `auditd`.
+
+Сценарий `compliant` задаёт:
+
+- `PermitRootLogin no`, `PasswordAuthentication no`, `PermitEmptyPasswords no`, `X11Forwarding no`, `MaxAuthTries 4`;
+- `ufw --force enable` и `ufw default deny incoming`;
+- удаление telnet/rsh/FTP denylist-пакетов;
+- установку и включение `auditd`, активный `rsyslog`, включённый `systemd-timesyncd`.
+
+Вернуть targets в drifting-состояние можно явно:
+
+```bash
+./scripts/provision.sh -e target_baseline_state=drifting
+./scripts/scan-and-report.sh
+```
 
 ## Сценарий 4. Короткая демонстрация для защиты
 
