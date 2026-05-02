@@ -6,11 +6,12 @@ PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 INVENTORY="${PROJECT_ROOT}/ansible/inventory/hosts.ini"
 ANSIBLE_CONFIG_PATH="${PROJECT_ROOT}/ansible.cfg"
 ANSIBLE_ROLES_PATH="${PROJECT_ROOT}/ansible/roles"
-WINDOWS_HOST_IP="${WINDOWS_HOST_IP:-127.0.0.1}"
 RUNTIME_INVENTORY="$(mktemp)"
 VAGRANT_KEY="${VAGRANT_INSECURE_PRIVATE_KEY:-$HOME/.vagrant.d/insecure_private_key}"
 
 cd "${PROJECT_ROOT}"
+# shellcheck source=scripts/env-windows-host-ip.sh
+. "${SCRIPT_DIR}/env-windows-host-ip.sh"
 trap 'rm -f "${RUNTIME_INVENTORY}"' EXIT
 
 export ANSIBLE_CONFIG="${ANSIBLE_CONFIG_PATH}"

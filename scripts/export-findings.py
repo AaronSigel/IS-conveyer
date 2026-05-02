@@ -30,6 +30,26 @@ DEFAULT_VAGRANT_PRIVATE_KEY = os.environ.get("VAGRANT_INSECURE_PRIVATE_KEY", "~/
 DENYLIST_PACKAGES = ("telnet", "telnetd", "rsh-client", "rsh-redone-client", "rsh-server", "vsftpd", "proftpd", "pure-ftpd")
 
 
+def _is_wsl():
+    try:
+        return "microsoft" in pathlib.Path("/proc/version").read_text(encoding="utf-8").lower()
+    except OSError:
+        return False
+
+
+def _manager_ssh_host_port(manager_ip):
+    """SSH target to run indexer queries on the manager VM (see ansible inventory forwarded ports)."""
+    override_host = (os.environ.get("WAZUH_MANAGER_SSH_HOST") or "").strip()
+    override_port = (os.environ.get("WAZUH_MANAGER_SSH_PORT") or "").strip()
+    if override_host:
+        return override_host, int(override_port) if override_port else 22
+
+    if manager_ip and _is_wsl() and manager_ip.startswith("192.168.56."):
+        return "127.0.0.1", 2222
+
+    return manager_ip or "127.0.0.1", None
+
+
 def load_profile(path=PROFILE_PATH):
     profile = yaml.safe_load(path.read_text(encoding="utf-8"))
     sca_rules = {}
@@ -149,6 +169,7 @@ class WazuhIndexerClient:
             return self._search_via_ssh(index_pattern, body)
 
     def _search_via_ssh(self, index_pattern, body):
+        host, port = _manager_ssh_host_port(self.manager_ip)
         command = [
             "ssh",
             "-o",
@@ -157,15 +178,21 @@ class WazuhIndexerClient:
             "UserKnownHostsFile=/dev/null",
             "-i",
             str(pathlib.Path(DEFAULT_VAGRANT_PRIVATE_KEY).expanduser()),
-            f"vagrant@{self.manager_ip}",
-            (
-                "sudo curl -sk "
-                f"-u {self.username}:{self.password} "
-                "-H 'Content-Type: application/json' "
-                f"-X POST https://127.0.0.1:9200/{index_pattern}/_search "
-                f"-d '{json.dumps(body, separators=(',', ':'))}'"
-            ),
         ]
+        if port:
+            command.extend(["-p", str(port)])
+        command.extend(
+            [
+                f"vagrant@{host}",
+                (
+                    "sudo curl -sk "
+                    f"-u {self.username}:{self.password} "
+                    "-H 'Content-Type: application/json' "
+                    f"-X POST https://127.0.0.1:9200/{index_pattern}/_search "
+                    f"-d '{json.dumps(body, separators=(',', ':'))}'"
+                ),
+            ]
+        )
         result = subprocess.run(command, check=True, capture_output=True, text=True)
         return json.loads(result.stdout)
 

@@ -193,9 +193,8 @@ function Invoke-InWslRepo {
     $resolvedDistro = Get-WslDistroName -Distro $Distro
     $repoWslPath = Convert-WindowsPathToWsl -Path $RepoRoot
     $keyWslPath = Convert-WindowsPathToWsl -Path (Get-VagrantKeyWindowsPath)
-    $vagrantExeWslPath = Convert-WindowsPathToWsl -Path (Get-WindowsCommandPath -CommandName "vagrant.exe")
+    [void](Get-WindowsCommandPath -CommandName "vagrant.exe")
     $virtualBoxExeWslPath = Convert-WindowsPathToWsl -Path (Get-WindowsCommandPath -CommandName "VBoxManage.exe")
-    $vagrantBinDir = Split-Path $vagrantExeWslPath -Parent
     $virtualBoxBinDir = Split-Path $virtualBoxExeWslPath -Parent
     $wrapperDir = "/tmp/is-conveyer-windows-bin"
     $scriptFile = [System.IO.Path]::Combine([System.IO.Path]::GetTempPath(), ("is-conveyer-" + [System.Guid]::NewGuid().ToString("N") + ".sh"))
@@ -206,7 +205,12 @@ function Invoke-InWslRepo {
 set -euo pipefail
 
 export VAGRANT_WSL_ENABLE_WINDOWS_ACCESS=1
-export WINDOWS_HOST_IP="$(ip route show default | awk '/default/ { print $3; exit }')"
+export PYTHONUNBUFFERED=1
+export ANSIBLE_FORCE_COLOR=0
+export ANSIBLE_NOCOLOR=true
+export VAGRANT_FORCE_COLOR=0
+export VAGRANT_NO_COLOR=1
+export CI=1
 
 WRAPPER_DIR=__WRAPPER_DIR__
 VIRTUALBOX_BIN_DIR=__VIRTUALBOX_BIN_DIR__
@@ -248,7 +252,8 @@ __COMMAND__
 
     try {
         [System.IO.File]::WriteAllText($scriptFile, $linuxScript, [System.Text.UTF8Encoding]::new($false))
-        & wsl.exe -d $resolvedDistro -- bash $scriptFileWslPath
+        $wslCommand = "bash " + (Quote-ForBash -Value $scriptFileWslPath) + " </dev/null"
+        & wsl.exe -d $resolvedDistro -- bash -lc $wslCommand
         if ($LASTEXITCODE -ne 0) {
             throw "WSL command failed with exit code $LASTEXITCODE."
         }
@@ -270,7 +275,11 @@ function Invoke-WslScript {
     )
 
     $parts = New-Object System.Collections.Generic.List[string]
-    $parts.Add("bash")
+    # Shell scripts need an explicit interpreter; commands like python3 must not be prefixed with bash
+    # (bash would treat the interpreter path as a script file and fail with "cannot execute binary file").
+    if ($ScriptPath -like "*.sh") {
+        $parts.Add("bash")
+    }
     $parts.Add((Quote-ForBash -Value $ScriptPath))
 
     foreach ($arg in $Arguments) {

@@ -13,10 +13,11 @@ section() {
 run_vm() {
   local vm="$1"
   local cmd="$2"
-  if vagrant status "${vm}" 2>/dev/null | grep -q "running"; then
+  # Match only the running state line for this VM (avoid matching "not running" or another VM's line).
+  if vagrant status "${vm}" 2>/dev/null | grep -qE "^${vm}[[:space:]]+running[[:space:]]+\\("; then
     vagrant ssh "${vm}" -c "${cmd}"
   else
-    echo "${vm}: not running"
+    echo "${vm}: vagrant reports VM is not running (or status could not be read)"
   fi
 }
 
@@ -41,5 +42,6 @@ run_vm wazuh "sudo tail -n 60 /var/ossec/logs/ossec.log 2>/dev/null || echo /var
 section "Agent Status"
 for vm in target1 target2; do
   echo "-- ${vm} --"
-  run_vm "${vm}" "test -f /var/ossec/etc/ossec.conf && echo agent_present || echo agent_missing; systemctl is-active wazuh-agent 2>/dev/null || true"
+  # Config lives under /var/ossec/etc (often mode 750): use sudo so vagrant can stat the file.
+  run_vm "${vm}" "sudo test -f /var/ossec/etc/ossec.conf && echo agent_config_present || echo agent_config_missing; systemctl is-active wazuh-agent 2>/dev/null || true"
 done

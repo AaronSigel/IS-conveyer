@@ -50,8 +50,8 @@
     find_agent_id() {
       /var/ossec/bin/manage_agents -l | awk -v name="$agent_name" '
         $0 ~ ("Name: " name ", IP:") {
-          if (match($0, /ID: ([0-9]+)/, parts)) {
-            print parts[1]
+          if (match($0, /ID: [0-9]+/)) {
+            print substr($0, RSTART + 4, RLENGTH - 4)
             exit
           }
         }
@@ -61,8 +61,8 @@
     find_stale_ids() {
       /var/ossec/bin/manage_agents -l | awk -v name="$agent_name" -v ip="$agent_ip" '
         $0 ~ ("IP: " ip "$") && $0 !~ ("Name: " name ", IP:") {
-          if (match($0, /ID: ([0-9]+)/, parts)) {
-            print parts[1]
+          if (match($0, /ID: [0-9]+/)) {
+            print substr($0, RSTART + 4, RLENGTH - 4)
           }
         }
       '
@@ -93,6 +93,7 @@
     /var/ossec/bin/manage_agents -e "$agent_id"
   args:
     executable: /bin/bash
+  throttle: 1
   delegate_to: "{{ groups['wazuh'][0] }}"
   become: true
   register: wazuh_agent_key_line

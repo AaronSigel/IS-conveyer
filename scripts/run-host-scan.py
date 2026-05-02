@@ -3,6 +3,7 @@ import argparse
 import base64
 import json
 import os
+import re
 import pathlib
 import ssl
 import subprocess
@@ -20,6 +21,8 @@ CREDS_PATH = ARTIFACTS_DIR / "wazuh-credentials.env"
 INVENTORY_PATH = PROJECT_ROOT / "ansible" / "inventory" / "hosts.ini"
 DEFAULT_TARGETS = ("target1", "target2")
 SCA_POLICY_ID = "host-baseline-v1"
+COMMAND_TIMEOUT_SECONDS = 180
+API_TIMEOUT_SECONDS = 30
 
 
 def parse_hosts(raw_hosts):
@@ -55,10 +58,11 @@ def parse_wazuh_time(value):
 
 
 class WazuhApiClient:
-    def __init__(self, base_url, username, password):
+    def __init__(self, base_url, username, password, timeout=API_TIMEOUT_SECONDS):
         self.base_url = base_url.rstrip("/")
         self.username = username
         self.password = password
+        self.timeout = timeout
         self.context = ssl._create_unverified_context()
         self.token = self._authenticate()
 
@@ -76,7 +80,7 @@ class WazuhApiClient:
             payload = json.dumps(body).encode("utf-8")
             request.data = payload
             request.add_header("Content-Type", "application/json")
-        with urllib.request.urlopen(request, context=self.context) as response:
+        with urllib.request.urlopen(request, context=self.context, timeout=self.timeout) as response:
             return response.read().decode("utf-8")
 
     def _authenticate(self):
@@ -94,7 +98,7 @@ class WazuhApiClient:
             headers={"Authorization": f"Bearer {self.token}"},
             method="GET",
         )
-        with urllib.request.urlopen(request, context=self.context) as response:
+        with urllib.request.urlopen(request, context=self.context, timeout=self.timeout) as response:
             return json.loads(response.read().decode("utf-8"))
 
 
@@ -110,12 +114,25 @@ def run_command(command):
         for part in command
     ]
     try:
-        result = subprocess.run(patched_command, cwd=PROJECT_ROOT, capture_output=True, text=True, env=env)
+        result = subprocess.run(
+            patched_command,
+            cwd=PROJECT_ROOT,
+            capture_output=True,
+            text=True,
+            env=env,
+            timeout=COMMAND_TIMEOUT_SECONDS,
+        )
         if result.returncode != 0:
             raise RuntimeError(
                 f"Command failed ({result.returncode}): {' '.join(patched_command)}\n{result.stdout}\n{result.stderr}".strip()
             )
         return result
+    except subprocess.TimeoutExpired as exc:
+        stdout = exc.stdout or ""
+        stderr = exc.stderr or ""
+        raise RuntimeError(
+            f"Command timed out after {COMMAND_TIMEOUT_SECONDS}s: {' '.join(patched_command)}\n{stdout}\n{stderr}".strip()
+        ) from exc
     finally:
         if inventory_path != INVENTORY_PATH and inventory_path.exists():
             inventory_path.unlink()
@@ -123,16 +140,30 @@ def run_command(command):
 
 def build_runtime_inventory():
     windows_host_ip = os.environ.get("WINDOWS_HOST_IP", "127.0.0.1").strip() or "127.0.0.1"
-    if windows_host_ip == "127.0.0.1":
+    vagrant_key = (os.environ.get("VAGRANT_INSECURE_PRIVATE_KEY") or "").strip()
+
+    # WSL wrapper copies the Windows Vagrant key to /tmp and sets VAGRANT_INSECURE_PRIVATE_KEY;
+    # static inventory still points at ~/.vagrant.d/... which does not exist inside WSL.
+    if windows_host_ip == "127.0.0.1" and not vagrant_key:
         return INVENTORY_PATH
 
-    inventory_text = INVENTORY_PATH.read_text(encoding="utf-8").replace(
-        "ansible_host=127.0.0.1",
-        f"ansible_host={windows_host_ip}",
-    )
-    vagrant_key = os.environ.get("VAGRANT_INSECURE_PRIVATE_KEY") or "~/.vagrant.d/insecure_private_key"
-    inventory_text += f"\nansible_ssh_private_key_file={vagrant_key}\n"
+    inventory_text = INVENTORY_PATH.read_text(encoding="utf-8")
+    if windows_host_ip != "127.0.0.1":
+        inventory_text = inventory_text.replace(
+            "ansible_host=127.0.0.1",
+            f"ansible_host={windows_host_ip}",
+        )
+    if vagrant_key:
+        inventory_text = re.sub(
+            r"^ansible_ssh_private_key_file=.*$",
+            f"ansible_ssh_private_key_file={vagrant_key}",
+            inventory_text,
+            count=1,
+            flags=re.MULTILINE,
+        )
+
     runtime_inventory = ARTIFACTS_DIR / "runtime-hosts.ini"
+    runtime_inventory.parent.mkdir(parents=True, exist_ok=True)
     runtime_inventory.write_text(inventory_text, encoding="utf-8")
     return runtime_inventory
 
@@ -237,11 +268,12 @@ def main():
     hosts = parse_hosts(args.hosts)
 
     scan_started_at = datetime.now(timezone.utc).replace(microsecond=0)
-    print(f"scan started at {scan_started_at.isoformat().replace('+00:00', 'Z')}")
-    print(f"hosts: {', '.join(hosts)}")
+    print(f"scan started at {scan_started_at.isoformat().replace('+00:00', 'Z')}", flush=True)
+    print(f"hosts: {', '.join(hosts)}", flush=True)
     creds = load_required_credentials()
 
     limit = ":".join(hosts)
+    print("triggering wazuh-agent restart via ansible", flush=True)
     run_command(
         [
             "ansible",
@@ -255,6 +287,7 @@ def main():
             "name=wazuh-agent state=restarted",
         ]
     )
+    print("wazuh-agent restart command completed", flush=True)
 
     try:
         client = build_api_client(creds)
@@ -263,12 +296,13 @@ def main():
             raise
         creds = load_required_credentials()
         client = build_api_client(creds)
+    print("waiting for fresh Wazuh scan data", flush=True)
     wait_for_scan_data(client, hosts, args.timeout, args.poll_interval, scan_started_at)
 
     scan_label = build_output_paths(args.output_prefix)
     if scan_label:
-        print(f"scan label: {scan_label}")
-    print("scan data is ready for export")
+        print(f"scan label: {scan_label}", flush=True)
+    print("scan data is ready for export", flush=True)
 
 
 if __name__ == "__main__":

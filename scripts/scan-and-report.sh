@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+trap 'status=$?; echo "[scan-and-report] failed at line ${LINENO}: ${BASH_COMMAND}" >&2; exit "${status}"' ERR
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
@@ -7,6 +8,10 @@ HOSTS="target1,target2"
 OUTPUT_PREFIX=""
 OUTPUT_DIR=""
 EXTRA_SCAN_ARGS=()
+
+stage() {
+  printf '[scan-and-report] %s %s\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" "$1"
+}
 
 usage() {
   cat <<'EOF'
@@ -48,9 +53,21 @@ while (($# > 0)); do
 done
 
 cd "${PROJECT_ROOT}"
+# shellcheck source=scripts/env-windows-host-ip.sh
+. "${SCRIPT_DIR}/env-windows-host-ip.sh"
 
-./scripts/run-host-scan.py "${EXTRA_SCAN_ARGS[@]}"
-bash ./scripts/collect-report.sh \
-  --hosts "${HOSTS}" \
-  ${OUTPUT_PREFIX:+--output-prefix "${OUTPUT_PREFIX}"} \
-  ${OUTPUT_DIR:+--output-dir "${OUTPUT_DIR}"}
+stage "starting host scan"
+python3 scripts/run-host-scan.py "${EXTRA_SCAN_ARGS[@]}"
+stage "host scan finished"
+
+collect_args=(--hosts "${HOSTS}")
+if [[ -n "${OUTPUT_PREFIX}" ]]; then
+  collect_args+=(--output-prefix "${OUTPUT_PREFIX}")
+fi
+if [[ -n "${OUTPUT_DIR}" ]]; then
+  collect_args+=(--output-dir "${OUTPUT_DIR}")
+fi
+
+stage "starting report collection"
+bash ./scripts/collect-report.sh "${collect_args[@]}"
+stage "report collection finished"
