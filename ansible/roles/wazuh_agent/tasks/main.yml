@@ -48,21 +48,47 @@
     changed=0
 
     find_agent_id() {
-      /var/ossec/bin/manage_agents -l | awk -v name="$agent_name" '
-        $0 ~ ("Name: " name ", IP:") {
+      /var/ossec/bin/manage_agents -l | awk -v expected_name="$agent_name" -v expected_ip="$agent_ip" '
+        /ID: [0-9]+, Name: / {
+          line = $0
+          id = name = ip = ""
+
           if (match($0, /ID: [0-9]+/)) {
-            print substr($0, RSTART + 4, RLENGTH - 4)
-            exit
+            id = substr($0, RSTART + 4, RLENGTH - 4)
+          }
+          if (match(line, /Name: [^,]+, IP:/)) {
+            name = substr(line, RSTART + 6, RLENGTH - 11)
+          }
+          if (match(line, /IP: [^, ]+/)) {
+            ip = substr(line, RSTART + 4, RLENGTH - 4)
+          }
+
+          if (id != "" && name == expected_name && ip == expected_ip) {
+            print id
+            exit 0
           }
         }
       '
     }
 
     find_stale_ids() {
-      /var/ossec/bin/manage_agents -l | awk -v name="$agent_name" -v ip="$agent_ip" '
-        $0 ~ ("IP: " ip "$") && $0 !~ ("Name: " name ", IP:") {
+      /var/ossec/bin/manage_agents -l | awk -v expected_name="$agent_name" -v expected_ip="$agent_ip" '
+        /ID: [0-9]+, Name: / {
+          line = $0
+          id = name = ip = ""
+
           if (match($0, /ID: [0-9]+/)) {
-            print substr($0, RSTART + 4, RLENGTH - 4)
+            id = substr($0, RSTART + 4, RLENGTH - 4)
+          }
+          if (match(line, /Name: [^,]+, IP:/)) {
+            name = substr(line, RSTART + 6, RLENGTH - 11)
+          }
+          if (match(line, /IP: [^, ]+/)) {
+            ip = substr(line, RSTART + 4, RLENGTH - 4)
+          }
+
+          if (id != "" && (name == expected_name || ip == expected_ip) && !(name == expected_name && ip == expected_ip)) {
+            print id
           }
         }
       '
@@ -83,7 +109,18 @@
 
       /var/ossec/bin/manage_agents -a "$agent_ip" -n "$agent_name" >/dev/null
       changed=1
-      agent_id="$(find_agent_id)"
+
+      for _ in $(seq 1 10); do
+        agent_id="$(find_agent_id || true)"
+        [ -n "$agent_id" ] && break
+        sleep 1
+      done
+    fi
+
+    if [ -z "$agent_id" ]; then
+      echo "Unable to find Wazuh agent ID for ${agent_name} (${agent_ip}) after enrollment." >&2
+      /var/ossec/bin/manage_agents -l >&2
+      exit 1
     fi
 
     if [ "$changed" -eq 1 ]; then

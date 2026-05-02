@@ -7,8 +7,8 @@ Vagrant.configure("2") do |config|
   machines = {
     "wazuh" => {
       ip: "192.168.56.10",
-      memory: 10240,
-      cpus: 4,
+      memory: 9072,
+      cpus: 2,
       extra_disk_mb: 20480,
       ssh_port: 2222,
       forwarded_ports: [

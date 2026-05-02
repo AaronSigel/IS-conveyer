@@ -33,6 +33,8 @@
 
 Для запуска на Windows используйте `WSL` как Linux control-plane, а `Vagrant` и `VirtualBox` оставляйте на стороне Windows.
 
+Если PowerShell пишет, что выполнение `.\up.ps1` отключено политикой, вызовите **`.\scripts\windows\up.cmd`** (из `scripts\windows` — **`.\up.cmd`**): это тонкая обёртка над `powershell -ExecutionPolicy Bypass -File` и не требует менять `ExecutionPolicy`.
+
 Подготовка WSL-окружения:
 
 ```powershell
@@ -45,21 +47,39 @@ powershell -ExecutionPolicy Bypass -File .\scripts\windows\bootstrap-wsl.ps1
 powershell -ExecutionPolicy Bypass -File .\scripts\windows\e2e.ps1
 ```
 
-Доступные Windows-обёртки:
+Доступные Windows-обёртки (при политике `Restricted` удобнее **`.\scripts\windows\<имя>.cmd`**; иначе — явный вызов PowerShell ниже; см. [docs/windows-run.md](docs/windows-run.md)):
 
-```powershell
-.\scripts\windows\up.ps1
-.\scripts\windows\provision.ps1
-.\scripts\windows\smoke-test.ps1
-.\scripts\windows\run-host-scan.ps1 --hosts target1
-.\scripts\windows\scan-and-report.ps1
-.\scripts\windows\collect-report.ps1
-.\scripts\windows\capture-state.ps1
-.\scripts\windows\watch-state.ps1 5
-.\scripts\windows\destroy.ps1
+```bat
+.\scripts\windows\bootstrap-wsl.cmd
+.\scripts\windows\up.cmd
+.\scripts\windows\provision.cmd
+.\scripts\windows\smoke-test.cmd
+.\scripts\windows\run-host-scan.cmd
+.\scripts\windows\scan-and-report.cmd
+.\scripts\windows\collect-report.cmd
+.\scripts\windows\run-ui.cmd
+.\scripts\windows\capture-state.cmd
+.\scripts\windows\watch-state.cmd
+.\scripts\windows\e2e.cmd
+.\scripts\windows\destroy.cmd
 ```
 
-Подробная инструкция по подготовке Windows-окружения лежит в [docs/windows-run.md](/home/funder/IS-project/docs/windows-run.md).
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\windows\up.ps1
+powershell -ExecutionPolicy Bypass -File .\scripts\windows\provision.ps1
+powershell -ExecutionPolicy Bypass -File .\scripts\windows\smoke-test.ps1
+powershell -ExecutionPolicy Bypass -File .\scripts\windows\run-host-scan.ps1
+powershell -ExecutionPolicy Bypass -File .\scripts\windows\run-host-scan.ps1 --hosts target1
+powershell -ExecutionPolicy Bypass -File .\scripts\windows\scan-and-report.ps1
+powershell -ExecutionPolicy Bypass -File .\scripts\windows\collect-report.ps1
+powershell -ExecutionPolicy Bypass -File .\scripts\windows\run-ui.ps1
+powershell -ExecutionPolicy Bypass -File .\scripts\windows\capture-state.ps1
+powershell -ExecutionPolicy Bypass -File .\scripts\windows\watch-state.ps1
+powershell -ExecutionPolicy Bypass -File .\scripts\windows\watch-state.ps1 5
+powershell -ExecutionPolicy Bypass -File .\scripts\windows\destroy.ps1
+```
+
+Подробная инструкция по подготовке Windows-окружения лежит в [docs/windows-run.md](docs/windows-run.md).
 
 Текущая модель Windows-запуска опирается на:
 - установленный `WSL`-дистрибутив `Ubuntu`;
@@ -86,12 +106,29 @@ powershell -ExecutionPolicy Bypass -File .\scripts\windows\e2e.ps1
 3. При необходимости отдельно запускать scan trigger через `./scripts/run-host-scan.py`.
 4. При необходимости отдельно выгружать findings и собирать отчёт через `./scripts/collect-report.sh`.
 
+С хоста Windows те же шаги 1–4 (политика выполнения см. [docs/windows-run.md](docs/windows-run.md)):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\windows\e2e.ps1
+powershell -ExecutionPolicy Bypass -File .\scripts\windows\scan-and-report.ps1
+powershell -ExecutionPolicy Bypass -File .\scripts\windows\run-host-scan.ps1
+powershell -ExecutionPolicy Bypass -File .\scripts\windows\collect-report.ps1
+```
+
 `e2e.sh` поднимает VM, выполняет provisioning, запускает smoke test и формирует итоговые artifacts/отчёт одним вызовом.
 
 ```bash
 ./scripts/e2e.sh
 ./scripts/e2e.sh --hosts target1 --output-prefix target1-manual
 ./scripts/e2e.sh --skip-smoke-test --timeout 900
+```
+
+Windows:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\windows\e2e.ps1
+powershell -ExecutionPolicy Bypass -File .\scripts\windows\e2e.ps1 --hosts target1 --output-prefix target1-manual
+powershell -ExecutionPolicy Bypass -File .\scripts\windows\e2e.ps1 -SkipSmokeTest --timeout 900
 ```
 
 Покомпонентный режим остаётся доступен:
@@ -105,11 +142,33 @@ python scripts/validate-profile.py profiles/host-baseline-v1.yml
 ./scripts/collect-report.sh
 ```
 
+Windows:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\windows\up.ps1
+powershell -ExecutionPolicy Bypass -File .\scripts\windows\provision.ps1
+powershell -ExecutionPolicy Bypass -File .\scripts\windows\smoke-test.ps1
+```
+
+Проверку профиля выполните в WSL той же командой `python3 scripts/validate-profile.py ...` (отдельной обёртки `.ps1` нет).
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\windows\run-host-scan.ps1
+powershell -ExecutionPolicy Bypass -File .\scripts\windows\collect-report.ps1
+```
+
 Сканирование хостов и сбор итоговых отчётов:
 
 ```bash
 ./scripts/scan-and-report.sh
 ./scripts/scan-and-report.sh --hosts target1 --output-prefix target1-manual
+```
+
+Windows:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\windows\scan-and-report.ps1
+powershell -ExecutionPolicy Bypass -File .\scripts\windows\scan-and-report.ps1 --hosts target1 --output-prefix target1-manual
 ```
 
 Что делает `run-host-scan.py`:
@@ -137,6 +196,14 @@ python scripts/validate-profile.py profiles/host-baseline-v1.yml
 ./scripts/watch-state.sh 5
 ```
 
+Windows:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\windows\capture-state.ps1
+powershell -ExecutionPolicy Bypass -File .\scripts\windows\watch-state.ps1
+powershell -ExecutionPolicy Bypass -File .\scripts\windows\watch-state.ps1 5
+```
+
 `capture-state.sh` делает разовый снимок:
 - `vagrant status`
 - загрузка дисков на manager
@@ -153,11 +220,25 @@ python scripts/validate-profile.py profiles/host-baseline-v1.yml
 ./scripts/scan-and-report.sh
 ```
 
+Windows:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\windows\provision.ps1 -e target_baseline_state=compliant
+powershell -ExecutionPolicy Bypass -File .\scripts\windows\scan-and-report.ps1
+```
+
 Вернуть targets к демонстрационным нарушениям:
 
 ```bash
 ./scripts/provision.sh -e target_baseline_state=drifting
 ./scripts/scan-and-report.sh
+```
+
+Windows:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\windows\provision.ps1 -e target_baseline_state=drifting
+powershell -ExecutionPolicy Bypass -File .\scripts\windows\scan-and-report.ps1
 ```
 
 Итоговые данные:
@@ -214,6 +295,18 @@ python scripts/generate-report.py \
 ./scripts/run-ui.sh
 ```
 
+С хоста Windows Web UI запускается **через локальный Python** (создаётся/используется `.venv` в корне репозитория; WSL не нужен):
+
+```bat
+.\scripts\windows\run-ui.cmd
+```
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\windows\run-ui.ps1
+```
+
+Дополнительные аргументы передаются в `uvicorn` (например `--port 8090`).
+
 ### Адрес
 
 ```text
@@ -232,6 +325,12 @@ http://127.0.0.1:8080
 
 ```bash
 ./scripts/destroy.sh
+```
+
+Windows:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\windows\destroy.ps1
 ```
 
 ## Структура проекта

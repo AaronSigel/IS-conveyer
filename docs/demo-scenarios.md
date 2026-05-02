@@ -6,6 +6,12 @@
 ./scripts/e2e.sh --skip-smoke-test
 ```
 
+Под Windows:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\windows\e2e.ps1 -SkipSmokeTest
+```
+
 Ожидаемый результат:
 
 - `Vagrant` создаёт и запускает `wazuh`, `target1`, `target2`;
@@ -16,6 +22,12 @@
 
 ```bash
 ./scripts/scan-and-report.sh
+```
+
+Под Windows:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\windows\scan-and-report.ps1
 ```
 
 Ожидаемый результат:
@@ -33,10 +45,18 @@
 python scripts/validate-profile.py profiles/host-baseline-v1.yml
 ```
 
+Под Windows отдельной обёртки `.ps1` нет; выполните ту же команду внутри WSL из каталога репозитория.
+
 ## Сценарий 2a. Отдельный отчёт по выбранному хосту
 
 ```bash
 ./scripts/scan-and-report.sh --hosts target1 --output-prefix target1-manual
+```
+
+Под Windows:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\windows\scan-and-report.ps1 --hosts target1 --output-prefix target1-manual
 ```
 
 Ожидаемый результат:
@@ -51,6 +71,13 @@ python scripts/validate-profile.py profiles/host-baseline-v1.yml
 ```bash
 ./scripts/provision.sh -e target_baseline_state=compliant
 ./scripts/scan-and-report.sh
+```
+
+Под Windows:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\windows\provision.ps1 -e target_baseline_state=compliant
+powershell -ExecutionPolicy Bypass -File .\scripts\windows\scan-and-report.ps1
 ```
 
 Ожидаемый результат:
@@ -80,6 +107,13 @@ python scripts/validate-profile.py profiles/host-baseline-v1.yml
 ./scripts/scan-and-report.sh
 ```
 
+Под Windows:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\windows\provision.ps1 -e target_baseline_state=drifting
+powershell -ExecutionPolicy Bypass -File .\scripts\windows\scan-and-report.ps1
+```
+
 ## Сценарий 4. Короткая демонстрация для защиты
 
 1. Выполнить `./scripts/e2e.sh`.
@@ -89,7 +123,18 @@ python scripts/validate-profile.py profiles/host-baseline-v1.yml
 5. Выполнить `./scripts/provision.sh -e target_baseline_state=compliant`.
 6. Повторить `./scripts/scan-and-report.sh` и показать уменьшение числа `fail`.
 
+Под Windows (шаги 1, 5 и 6; политика выполнения — [windows-run.md](windows-run.md)):
+
+1. `powershell -ExecutionPolicy Bypass -File .\scripts\windows\e2e.ps1`
+2. (без изменений)
+3. (без изменений)
+4. (без изменений)
+5. `powershell -ExecutionPolicy Bypass -File .\scripts\windows\provision.ps1 -e target_baseline_state=compliant`
+6. `powershell -ExecutionPolicy Bypass -File .\scripts\windows\scan-and-report.ps1`
+
 ## Сценарий 5. Запуск под Windows
+
+Если политика выполнения блокирует `*.ps1`, из корня репозитория можно вызвать одноимённые **`*.cmd`** (например `.\scripts\windows\e2e.cmd`).
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\windows\bootstrap-wsl.ps1
@@ -102,3 +147,5 @@ powershell -ExecutionPolicy Bypass -File .\scripts\windows\e2e.ps1
 - `Vagrant` и `VirtualBox` работают на стороне Windows;
 - итоговые артефакты появляются в каталоге `artifacts` репозитория;
 - сценарий функционально повторяет Linux `./scripts/e2e.sh`.
+
+Остальные сценарии (1–4) для Windows см. в блоках «Под Windows» выше; полный список обёртек — [windows-run.md](windows-run.md).

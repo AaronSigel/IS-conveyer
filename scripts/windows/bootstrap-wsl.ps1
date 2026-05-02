@@ -23,7 +23,7 @@ $resolvedDistro = Get-WslDistroName -Distro $Distro
 
 $bootstrapCommand = @(
     "sudo apt-get update"
-    "sudo DEBIAN_FRONTEND=noninteractive apt-get install -y ansible python3 openssh-client git curl"
+    "sudo DEBIAN_FRONTEND=noninteractive apt-get install -y ansible python3 python3-venv openssh-client git curl"
 ) -join "; "
 
 & wsl.exe -d $resolvedDistro -- bash -lc $bootstrapCommand

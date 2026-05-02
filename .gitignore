@@ -5,6 +5,7 @@
 artifacts/*
 !artifacts/.gitkeep
 __pycache__/
+.venv/
 *.retry
 *.swp
 .DS_Store

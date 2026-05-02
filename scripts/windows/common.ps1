@@ -193,9 +193,10 @@ function Invoke-InWslRepo {
     $resolvedDistro = Get-WslDistroName -Distro $Distro
     $repoWslPath = Convert-WindowsPathToWsl -Path $RepoRoot
     $keyWslPath = Convert-WindowsPathToWsl -Path (Get-VagrantKeyWindowsPath)
-    [void](Get-WindowsCommandPath -CommandName "vagrant.exe")
     $virtualBoxExeWslPath = Convert-WindowsPathToWsl -Path (Get-WindowsCommandPath -CommandName "VBoxManage.exe")
     $virtualBoxBinDir = Split-Path $virtualBoxExeWslPath -Parent
+    $vagrantExeWin = Get-WindowsCommandPath -CommandName "vagrant.exe"
+    $vagrantBinDirWsl = Convert-WindowsPathToWsl -Path (Split-Path $vagrantExeWin -Parent)
     $wrapperDir = "/tmp/is-conveyer-windows-bin"
     $scriptFile = [System.IO.Path]::Combine([System.IO.Path]::GetTempPath(), ("is-conveyer-" + [System.Guid]::NewGuid().ToString("N") + ".sh"))
     $scriptFileWslPath = Convert-WindowsPathToWsl -Path $scriptFile
@@ -223,13 +224,19 @@ export VAGRANT_INSECURE_PRIVATE_KEY="$WSL_VAGRANT_KEY"
 
 cat > "$WRAPPER_DIR/vagrant" <<'EOF'
 #!/usr/bin/env bash
-PATH="$PATH:/mnt/c/Windows/System32" exec cmd.exe /c vagrant.exe "$@"
+# Reset PATH before Windows Vagrant: it can forward PATH over SSH and the guest would hit this shim.
+VG=__VG_BASH_LITERAL__
+VB=__VB_BASH_LITERAL__
+export PATH="/mnt/c/Windows/System32:/mnt/c/Windows:${VG}:${VB}"
+exec cmd.exe /c vagrant.exe "$@"
 EOF
 chmod +x "$WRAPPER_DIR/vagrant"
 
 cat > "$WRAPPER_DIR/VBoxManage" <<'EOF'
 #!/usr/bin/env bash
-PATH="$PATH:/mnt/c/Windows/System32" exec cmd.exe /c VBoxManage.exe "$@"
+VB=__VB_BASH_LITERAL__
+export PATH="/mnt/c/Windows/System32:/mnt/c/Windows:${VB}"
+exec cmd.exe /c VBoxManage.exe "$@"
 EOF
 chmod +x "$WRAPPER_DIR/VBoxManage"
 
@@ -242,6 +249,8 @@ __COMMAND__
     $linuxScript = $linuxScript.Replace("__KEY_WSL_PATH__", (Quote-ForBash -Value $keyWslPath))
     $linuxScript = $linuxScript.Replace("__WRAPPER_DIR__", (Quote-ForBash -Value $wrapperDir))
     $linuxScript = $linuxScript.Replace("__VIRTUALBOX_BIN_DIR__", (Quote-ForBash -Value $virtualBoxBinDir))
+    $linuxScript = $linuxScript.Replace("__VG_BASH_LITERAL__", "VG=" + (Quote-ForBash -Value $vagrantBinDirWsl))
+    $linuxScript = $linuxScript.Replace("__VB_BASH_LITERAL__", "VB=" + (Quote-ForBash -Value $virtualBoxBinDir))
     $linuxScript = $linuxScript.Replace("__REPO_WSL_PATH__", (Quote-ForBash -Value $repoWslPath))
     $linuxScript = $linuxScript.Replace("__COMMAND__", $Command)
     $linuxScript = $linuxScript.Replace("`r`n", "`n").Replace("`r", "`n")

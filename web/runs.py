@@ -50,6 +50,35 @@ def empty_summary() -> dict[str, int]:
     return {"total": 0, "pass": 0, "fail": 0, "critical": 0, "high": 0, "medium": 0, "low": 0}
 
 
+def _normalize_run_metadata(record: Any) -> dict[str, Any] | None:
+    """Return a dict safe for dashboard templates, or None if the row should be skipped."""
+    if not isinstance(record, dict):
+        return None
+    run_id = record.get("id")
+    if not run_id or not isinstance(run_id, str):
+        return None
+    summary = empty_summary()
+    raw_summary = record.get("summary")
+    if isinstance(raw_summary, dict):
+        for key in summary:
+            try:
+                summary[key] = int(raw_summary.get(key, 0))
+            except (TypeError, ValueError):
+                summary[key] = 0
+    hosts = record.get("hosts")
+    if not isinstance(hosts, list):
+        hosts = []
+    else:
+        hosts = [str(h) for h in hosts if h is not None]
+    status = record.get("status")
+    out = dict(record)
+    out["id"] = run_id
+    out["summary"] = summary
+    out["hosts"] = hosts
+    out["status"] = str(status) if status is not None else "unknown"
+    return out
+
+
 def create_run(hosts: list[str], create_default_export: bool = True) -> dict[str, Any]:
     RUNS_DIR.mkdir(parents=True, exist_ok=True)
     run_id = make_run_id()
@@ -144,11 +173,16 @@ def finish_run(run_id: str, returncode: int) -> dict[str, Any]:
 
 def list_runs() -> list[dict[str, Any]]:
     RUNS_DIR.mkdir(parents=True, exist_ok=True)
-    items = []
+    items: list[dict[str, Any]] = []
     for metadata_path in RUNS_DIR.glob("*/metadata.json"):
-        metadata = read_json(metadata_path, {})
-        if metadata:
-            items.append(metadata)
+        try:
+            raw = metadata_path.read_text(encoding="utf-8")
+            metadata = json.loads(raw)
+        except (json.JSONDecodeError, OSError):
+            continue
+        normalized = _normalize_run_metadata(metadata)
+        if normalized:
+            items.append(normalized)
     return sorted(items, key=lambda item: item.get("started_at") or item.get("id", ""), reverse=True)
 
 

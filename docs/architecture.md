@@ -23,7 +23,7 @@
 ## Роль Vagrant
 
 `Vagrant` обеспечивает одинаковый способ запуска стенда на Linux и Windows с одним и тем же `Vagrantfile`.
-На Windows orchestration выполняется через `WSL`, а запуск точек входа происходит PowerShell-обёртками из `scripts/windows/`.
+На Windows orchestration выполняется через `WSL`, а запуск точек входа происходит PowerShell-обёртками из `scripts/windows/`. Из-за политики выполнения PowerShell в примерах используется вызов вида `powershell -ExecutionPolicy Bypass -File .\scripts\windows\…` (подробности в [windows-run.md](windows-run.md)).
 
 ## Роль Ansible
 
