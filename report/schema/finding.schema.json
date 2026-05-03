@@ -143,6 +143,48 @@
     },
     "sca_check_id": {
       "type": ["integer", "string", "null"]
+    },
+    "wazuh_sca": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": ["integer", "string", "null"]
+        },
+        "title": {
+          "type": ["string", "null"]
+        },
+        "target": {
+          "type": ["string", "null"]
+        },
+        "result": {
+          "type": ["string", "null"]
+        },
+        "rationale": {
+          "type": ["string", "null"]
+        },
+        "remediation": {
+          "type": ["string", "null"]
+        },
+        "description": {
+          "type": ["string", "null"]
+        },
+        "checks": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "compliance": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "condition": {
+          "type": ["string", "null"]
+        }
+      },
+      "additionalProperties": true
     }
   }
 }

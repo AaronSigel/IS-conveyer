@@ -288,6 +288,18 @@ def compliance_values(compliance):
     return values
 
 
+def sca_check_values(rules):
+    values = []
+    for item in rules or []:
+        if isinstance(item, dict):
+            rule = item.get("rule")
+            if rule:
+                values.append(str(rule))
+        elif item:
+            values.append(str(item))
+    return values
+
+
 def sca_rule_id(check_id):
     return f"{SCA_POLICY_ID}:{check_id}" if check_id is not None else SCA_POLICY_ID
 
@@ -305,7 +317,7 @@ def normalize_sca_findings(host, sca_checks, sca_rules=None):
             evidence.append(f"Command: {command}")
         if item.get("reason"):
             evidence.append(item["reason"])
-        rule_texts = [rule["rule"] for rule in item.get("rules", []) if rule.get("rule")]
+        rule_texts = sca_check_values(item.get("rules"))
         if rule_texts:
             evidence.append(f"Rules: {'; '.join(rule_texts)}")
         compliance = compliance_values(item.get("compliance"))
@@ -327,6 +339,18 @@ def normalize_sca_findings(host, sca_checks, sca_rules=None):
                 "impact": item.get("rationale"),
                 "detection_method": f"Wazuh SCA policy {SCA_POLICY_ID}",
                 "sca_check_id": check_id,
+                "wazuh_sca": {
+                    "id": check_id,
+                    "title": item.get("title"),
+                    "target": item.get("target") or command,
+                    "result": item.get("result"),
+                    "rationale": item.get("rationale"),
+                    "remediation": item.get("remediation"),
+                    "description": item.get("description"),
+                    "checks": rule_texts,
+                    "compliance": compliance,
+                    "condition": item.get("condition"),
+                },
             }
         )
     return findings

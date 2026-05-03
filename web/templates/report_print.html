@@ -7,8 +7,8 @@
     body { font-family: system-ui, -apple-system, Segoe UI, sans-serif; color:#17202a; line-height:1.35; }
     h1, h2, h3 { margin-bottom: 8px; }
     table { width:100%; border-collapse:collapse; font-size:10px; margin:8px 0 14px; }
-    th, td { border:1px solid #d7dde5; padding:5px; text-align:left; vertical-align:top; word-break:break-word; }
-    th { background:#eef2f7; }
+    th, td { border:1px solid #222; padding:6px; text-align:left; vertical-align:top; word-break:break-word; }
+    th { background:#f2f2f2; text-align:center; }
     pre { white-space:pre-wrap; background:#f6f7f9; padding:10px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
     .metrics { display:grid; grid-template-columns:repeat(4, 1fr); gap:10px; margin:16px 0; }
     .metrics div { border:1px solid #d7dde5; padding:10px; }
@@ -16,6 +16,8 @@
     .passport { break-inside: avoid; page-break-inside: avoid; margin: 18px 0 26px; }
     .passport h3 { border-bottom:2px solid #17202a; padding-bottom:5px; }
     .label { font-weight:700; }
+    .passport-form td:first-child { width:34%; font-weight:600; }
+    .passport-form td:last-child { white-space:pre-wrap; }
   </style>
 </head>
 <body class="print">
@@ -46,41 +48,14 @@
     <article class="passport">
       <h3>Паспорт № {{ passport.passport_id }} — {{ passport.title_ru }}</h3>
       <p class="label">{% if passport.template_kind == "package_vulnerability" %}Уязвимость пакета{% else %}Несоответствие конфигурации{% endif %}</p>
-      <table>
+      <table class="passport-form">
         <tbody>
-          <tr><th>Поле</th><th>Значение</th></tr>
-          <tr><td>ID паспорта</td><td>{{ passport.passport_id }}</td></tr>
-          <tr><td>Название</td><td>{{ passport.title_ru }}</td></tr>
-          <tr><td>Тип finding</td><td>{{ passport.finding_type_ru }}</td></tr>
-          <tr><td>Статус</td><td>{{ passport.status_ru }}</td></tr>
-          <tr><td>Хост</td><td>{{ passport.host }}</td></tr>
-          <tr><td>Актив / компонент</td><td>{{ passport.asset_component }}</td></tr>
-          {% if passport.template_kind == "package_vulnerability" %}
-          <tr><td>Пакет</td><td>{{ passport.package_name }}</td></tr>
-          <tr><td>Установленная версия</td><td>{{ passport.installed_version }}</td></tr>
-          <tr><td>CVE</td><td>{{ passport.cve }}</td></tr>
-          <tr><td>CVSS</td><td>{{ passport.cvss }}</td></tr>
-          {% endif %}
-          <tr><td>Нормализованный severity</td><td>{{ passport.severity_normalized }}</td></tr>
-          <tr><td>Категория</td><td>{{ passport.category_ru }}</td></tr>
-          <tr><td>Источник</td><td>{{ passport.source_ru }}</td></tr>
-          <tr><td>Дата выявления</td><td>{{ passport.detected_at }}</td></tr>
-          <tr><td>Rule ID</td><td>{{ passport.rule_id }}</td></tr>
+          <tr><th>Элемент описания уязвимости</th><th>Описание уязвимости</th></tr>
+          {% for row in passport.passport_rows %}
+          <tr><td>{{ row.label }}</td><td>{{ row.value }}</td></tr>
+          {% endfor %}
         </tbody>
       </table>
-      <table>
-        <tbody>
-          <tr><th>Поле</th><th>Значение</th></tr>
-          <tr><td>Команда проверки</td><td>{{ passport.verification_command }}</td></tr>
-          <tr><td>Ожидаемый результат</td><td>{{ passport.expected_result }}</td></tr>
-          <tr><td>Ссылки</td><td>{% for ref in passport.references %}<div>{{ ref }}</div>{% else %}данные отсутствуют{% endfor %}</td></tr>
-        </tbody>
-      </table>
-      <p><b>Описание:</b> {{ passport.description_ru }}</p>
-      <p><b>Evidence:</b></p>
-      <pre>{{ passport.evidence_structured }}</pre>
-      <p><b>Возможные последствия:</b> {{ passport.impact_ru }}</p>
-      <p><b>Возможные меры по устранению уязвимости:</b> {{ passport.remediation_ru }}</p>
     </article>
     {% else %}
     <p>По заданным критериям фильтрации уязвимости и несоответствия не выявлены.</p>

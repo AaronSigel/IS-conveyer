@@ -95,6 +95,7 @@ def test_cis_sca_findings_do_not_require_custom_profile_mapping():
                 "remediation": "Add install cramfs /bin/false to a modprobe config file.",
                 "result": "failed",
                 "command": "modprobe -n -v cramfs",
+                "condition": "any",
                 "compliance": [{"cis": ["1.1.1.1"]}],
                 "rules": [{"rule": "c:modprobe -n -v cramfs -> r:^install /bin/false"}],
             }
@@ -110,3 +111,12 @@ def test_cis_sca_findings_do_not_require_custom_profile_mapping():
     assert finding["status"] == "fail"
     assert finding["finding_type"] == "configuration_noncompliance"
     assert any("Compliance: cis: 1.1.1.1" == item for item in finding["evidence"])
+    assert finding["wazuh_sca"]["id"] == 35500
+    assert finding["wazuh_sca"]["target"] == "modprobe -n -v cramfs"
+    assert finding["wazuh_sca"]["result"] == "failed"
+    assert finding["wazuh_sca"]["rationale"] == "Uncommon filesystems should be disabled."
+    assert finding["wazuh_sca"]["description"] == "Disable cramfs."
+    assert finding["wazuh_sca"]["remediation"] == "Add install cramfs /bin/false to a modprobe config file."
+    assert finding["wazuh_sca"]["checks"] == ["c:modprobe -n -v cramfs -> r:^install /bin/false"]
+    assert finding["wazuh_sca"]["compliance"] == ["cis: 1.1.1.1"]
+    assert finding["wazuh_sca"]["condition"] == "any"

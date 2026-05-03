@@ -374,6 +374,18 @@ def nested(data, *keys):
     return current
 
 
+def wazuh_sca_data(finding):
+    data = finding.get("wazuh_sca")
+    return data if isinstance(data, dict) else {}
+
+
+def multiline_text(value):
+    if isinstance(value, list):
+        values = [str(item) for item in value if item not in (None, "")]
+        return "\n".join(values) if values else NO_DATA
+    return first_value(value, default=NO_DATA)
+
+
 def evidence_text(finding):
     evidence = finding.get("evidence")
     if isinstance(evidence, list):
@@ -489,6 +501,60 @@ def detection_method(finding, passport_meta, software_vulnerability):
     return "Wazuh SCA"
 
 
+def references_text(references):
+    if not references:
+        return NO_DATA
+    return "\n".join(str(item) for item in references if item not in (None, "")) or NO_DATA
+
+
+def passport_rows(passport):
+    discovery_parts = [
+        passport["detection_method"],
+        f"Target: {passport['wazuh_target']}" if passport.get("show_wazuh_sca") else None,
+        f"Checks:\n{passport['wazuh_checks']}" if passport.get("show_wazuh_sca") else None,
+        f"Condition: {passport['wazuh_condition']}" if passport.get("show_wazuh_sca") else None,
+    ]
+    discovery = "\n".join(str(item) for item in discovery_parts if item and item != NO_DATA)
+
+    other_info_parts = [
+        f"Хост: {passport['host']}",
+        f"Статус: {passport['status_ru']}",
+        f"Источник: {passport['source_ru']}",
+        f"Категория: {passport['category_ru']}",
+    ]
+    if passport.get("show_wazuh_sca"):
+        other_info_parts.extend(
+            [
+                f"Wazuh Result: {passport['wazuh_result']}",
+                f"Compliance:\n{passport['wazuh_compliance']}",
+            ]
+        )
+    if passport.get("references"):
+        other_info_parts.append(f"Ссылки:\n{references_text(passport['references'])}")
+
+    return [
+        {"label": "Наименование уязвимости", "value": passport["title_ru"]},
+        {"label": "Идентификатор уязвимости", "value": passport["passport_id"]},
+        {"label": "Идентификаторы других систем описаний уязвимостей", "value": passport["external_ids_text"]},
+        {"label": "Краткое описание уязвимости", "value": passport["description_ru"]},
+        {"label": "Класс уязвимости", "value": passport["vulnerability_class"]},
+        {"label": "Наименование ПО и его версия", "value": passport["affected_software"]},
+        {"label": "Служба (порт), которая используется для функционирования ПО", "value": passport["service_port_protocol"]},
+        {"label": "Язык программирования ПО", "value": NOT_APPLICABLE},
+        {"label": "Тип недостатка", "value": passport["weakness_type"]},
+        {"label": "Место возникновения (проявления) уязвимости", "value": passport["location"]},
+        {"label": "Идентификатор типа недостатка", "value": passport["weakness_id"]},
+        {"label": "Наименование операционной системы и тип аппаратной платформы", "value": passport["os_platform"]},
+        {"label": "Дата выявления уязвимости", "value": passport["detected_at"]},
+        {"label": "Автор, опубликовавший информацию о выявленной уязвимости", "value": passport["source_ru"]},
+        {"label": "Способ (правило) обнаружения уязвимости", "value": discovery or NO_DATA},
+        {"label": "Критерии опасности уязвимости", "value": passport["cvss_text"]},
+        {"label": "Степень опасности уязвимости", "value": passport["severity_normalized"]},
+        {"label": "Возможные меры по устранению уязвимости", "value": passport["remediation_ru"]},
+        {"label": "Прочая информация", "value": "\n".join(other_info_parts)},
+    ]
+
+
 def build_passports(selected_findings, profile_index, metadata, report_datetime):
     passports = []
     for index, finding in enumerate(selected_findings, start=1):
@@ -501,6 +567,8 @@ def build_passport(finding, index, profile_index, metadata, report_datetime):
     passport_meta = profile_rule.get("passport", {}) if isinstance(profile_rule.get("passport"), dict) else {}
     finding_type = first_value(finding.get("finding_type"), passport_meta.get("finding_type"), infer_finding_type(finding))
     software_vulnerability = finding_type == "software_vulnerability" or infer_finding_type(finding) == "software_vulnerability"
+    wazuh_sca = wazuh_sca_data(finding)
+    show_wazuh_sca = bool(wazuh_sca) and not software_vulnerability
     host_meta = host_metadata(metadata, finding.get("host"))
     year = report_datetime.year
     passport_id = first_value(finding.get("vulnerability_id"), default=f"ISCV-{year}-{index:04d}")
@@ -524,7 +592,7 @@ def build_passport(finding, index, profile_index, metadata, report_datetime):
     status = normalize_status(first_value(finding.get("status"), default=UNKNOWN))
     severity = normalized_severity(finding)
     source = first_value(finding.get("source"), default=UNKNOWN)
-    return {
+    passport = {
         "passport_id": passport_id,
         "title_ru": first_value(finding.get("title"), profile_rule.get("title")),
         "finding_type_ru": "Уязвимость пакета" if software_vulnerability else "Несоответствие конфигурации",
@@ -541,6 +609,7 @@ def build_passport(finding, index, profile_index, metadata, report_datetime):
         "detected_at": first_value(finding.get("detected_at"), default=NO_DATA),
         "rule_id": first_value(finding.get("rule_id"), default=UNKNOWN),
         "description_ru": first_value(
+            wazuh_sca.get("description") if not software_vulnerability else None,
             finding.get("description_ru"),
             finding.get("description"),
             profile_rule.get("description_ru"),
@@ -549,13 +618,43 @@ def build_passport(finding, index, profile_index, metadata, report_datetime):
             default=NO_DATA,
         ),
         "evidence_structured": evidence_text(finding).replace("<br>", "\n"),
-        "impact_ru": first_value(finding.get("impact_ru"), finding.get("impact"), passport_meta.get("impact"), profile_rule.get("impact_ru"), default=NO_DATA),
-        "remediation_ru": first_value(finding.get("remediation_ru"), finding.get("remediation"), profile_rule.get("remediation_ru"), profile_rule.get("remediation"), default=NO_DATA),
-        "verification_command": first_value(finding.get("verification_command"), profile_rule.get("verification_command"), default=NO_DATA),
+        "impact_ru": first_value(
+            wazuh_sca.get("rationale") if not software_vulnerability else None,
+            finding.get("impact_ru"),
+            finding.get("impact"),
+            passport_meta.get("impact"),
+            profile_rule.get("impact_ru"),
+            default=NO_DATA,
+        ),
+        "remediation_ru": first_value(
+            wazuh_sca.get("remediation") if not software_vulnerability else None,
+            finding.get("remediation_ru"),
+            finding.get("remediation"),
+            profile_rule.get("remediation_ru"),
+            profile_rule.get("remediation"),
+            default=NO_DATA,
+        ),
+        "verification_command": first_value(
+            wazuh_sca.get("target") if not software_vulnerability else None,
+            finding.get("verification_command"),
+            profile_rule.get("verification_command"),
+            default=NO_DATA,
+        ),
         "expected_result": first_value(finding.get("expected_result"), profile_rule.get("expected_result"), default=NO_DATA),
         "references": references,
         "template_kind": "package_vulnerability" if software_vulnerability else "configuration",
         "cvss_base_score": cvss_score,
+        "show_wazuh_sca": show_wazuh_sca,
+        "wazuh_id": first_value(wazuh_sca.get("id"), finding.get("sca_check_id"), default=NO_DATA),
+        "wazuh_title": first_value(wazuh_sca.get("title"), finding.get("title"), default=NO_DATA),
+        "wazuh_target": first_value(wazuh_sca.get("target"), default=NO_DATA),
+        "wazuh_result": first_value(wazuh_sca.get("result"), finding.get("status"), default=NO_DATA),
+        "wazuh_rationale": first_value(wazuh_sca.get("rationale"), finding.get("impact"), default=NO_DATA),
+        "wazuh_description": first_value(wazuh_sca.get("description"), finding.get("description"), default=NO_DATA),
+        "wazuh_remediation": first_value(wazuh_sca.get("remediation"), finding.get("remediation"), default=NO_DATA),
+        "wazuh_checks": multiline_text(wazuh_sca.get("checks")),
+        "wazuh_compliance": multiline_text(wazuh_sca.get("compliance")),
+        "wazuh_condition": first_value(wazuh_sca.get("condition"), default=NO_DATA),
         # Backward-compatible names used by older schema/templates.
         "title": first_value(finding.get("title"), profile_rule.get("title")),
         "external_ids_text": external_ids_text(finding, passport_meta),
@@ -582,6 +681,8 @@ def build_passport(finding, index, profile_index, metadata, report_datetime):
         "impact": first_value(finding.get("impact"), passport_meta.get("impact"), profile_rule.get("impact_ru"), default=NO_DATA),
         "remediation": first_value(finding.get("remediation"), profile_rule.get("remediation_ru"), profile_rule.get("remediation"), default=NO_DATA),
     }
+    passport["passport_rows"] = passport_rows(passport)
+    return passport
 
 
 def jinja_env():

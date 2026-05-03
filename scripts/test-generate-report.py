@@ -51,6 +51,8 @@ def assert_passport_format(report, expected_passports):
     assert "<th>host</th><th>source</th><th>category</th><th>rule_id</th>" not in report
     assert "| host | source | category | rule_id |" not in report
     assert "Рекомендации/remediation" not in report
+    assert "Элемент описания уязвимости" in report
+    assert "Описание уязвимости" in report
     assert "Возможные меры по устранению уязвимости" in report
 
 
@@ -83,8 +85,14 @@ def main():
         assert_no_forbidden_sections(full_report)
         assert full_report.count("### 5.") == 4, "Expected one passport per sample finding"
         assert_passport_format(full_report, 4)
-        assert "| CVSS | 9.3" in full_report
-        assert "Нормализованный severity | critical" in full_report
+        assert "| Критерии опасности уязвимости | 9.3" in full_report
+        assert "| Степень опасности уязвимости | critical |" in full_report
+        assert "| Наименование уязвимости | 1.1.1.1 Ensure cramfs kernel module is not available" in full_report
+        assert "| Идентификатор уязвимости | ISCV-2026-0001 |" in full_report
+        assert "Target: modprobe -n -v cramfs" in full_report
+        assert "Checks:<br>c:modprobe -n -v cramfs -> r:^install /bin/false" in full_report
+        assert "Wazuh Result: failed" in full_report
+        assert "Compliance:<br>cis: 1.1.1.1" in full_report
 
         high_report = run_report(tmpdir / "high.md", "--severity", "high")
         assert "Ensure cramfs kernel module is not available" in high_report
@@ -111,6 +119,11 @@ def main():
         assert_passport_format(html_report, 3)
         assert "Применённые фильтры: статус = fail." in html_report
         assert "{'status': {'op': 'in'" not in html_report
+        assert "<th>Элемент описания уязвимости</th><th>Описание уязвимости</th>" in html_report
+        assert "<td>Способ (правило) обнаружения уязвимости</td><td>Wazuh SCA policy cis_ubuntu24-04" in html_report
+        assert "Target: modprobe -n -v cramfs" in html_report
+        assert "Checks:\nc:modprobe -n -v cramfs -&gt; r:^install /bin/false" in html_report
+        assert "Wazuh Result: failed" in html_report
 
     print("generate-report smoke tests passed")
 
