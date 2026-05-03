@@ -14,7 +14,6 @@
     dest: "{{ project_root_on_target }}/profiles/{{ item | basename }}"
     mode: "0644"
   loop:
-    - host-baseline-v1.yml
     - allowed-software.yml
 
 - name: Deploy demo application configuration

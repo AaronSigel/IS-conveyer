@@ -3,45 +3,60 @@
     "host": "target1",
     "source": "wazuh_sca",
     "category": "configuration",
-    "rule_id": "SSH_ROOT_LOGIN_DISABLED",
-    "title": "Запрет входа root по SSH",
+    "rule_id": "cis_ubuntu24-04:35500",
+    "title": "1.1.1.1 Ensure cramfs kernel module is not available (Automated)",
     "severity": "high",
     "status": "fail",
     "evidence": [
-      "Command: sshd -T",
-      "Rules: c:sshd -T -> r:^permitrootlogin no$"
+      "Command: modprobe -n -v cramfs",
+      "Compliance: cis: 1.1.1.1",
+      "Rules: c:modprobe -n -v cramfs -> r:^install /bin/false"
     ],
-    "remediation": "Set `PermitRootLogin no` in sshd configuration and restart SSH.",
-    "sca_check_id": 10001
+    "remediation": "Edit or create a file in `/etc/modprobe.d/` ending in `.conf` and add `install cramfs /bin/false`.",
+    "finding_type": "configuration_noncompliance",
+    "description": "The cramfs filesystem type is not commonly used and should be disabled.",
+    "impact": "Disabling uncommon filesystems reduces the kernel attack surface.",
+    "detection_method": "Wazuh SCA policy cis_ubuntu24-04",
+    "sca_check_id": 35500
   },
   {
     "host": "target1",
     "source": "wazuh_sca",
     "category": "configuration",
-    "rule_id": "SSH_X11_FORWARDING_DISABLED",
-    "title": "Запрет X11 forwarding",
+    "rule_id": "cis_ubuntu24-04:35741",
+    "title": "5.1.20 Ensure X11 forwarding is disabled (Automated)",
     "severity": "medium",
     "status": "fail",
     "evidence": [
       "Command: sshd -T",
+      "Compliance: cis: 5.1.20",
       "Rules: c:sshd -T -> r:^x11forwarding no$"
     ],
     "remediation": "Set `X11Forwarding no` in sshd configuration and restart SSH.",
-    "sca_check_id": 10004
+    "finding_type": "configuration_noncompliance",
+    "description": "The SSH daemon should not permit X11 forwarding.",
+    "impact": "X11 forwarding expands the SSH session attack surface.",
+    "detection_method": "Wazuh SCA policy cis_ubuntu24-04",
+    "sca_check_id": 35741
   },
   {
     "host": "target2",
     "source": "wazuh_sca",
     "category": "configuration",
-    "rule_id": "AUDITD_INSTALLED",
-    "title": "auditd установлен",
+    "rule_id": "cis_ubuntu24-04:35680",
+    "title": "6.2.1.3 Ensure auditd is installed (Automated)",
     "severity": "medium",
     "status": "pass",
     "evidence": [
+      "Compliance: cis: 6.2.1.3",
       "Package auditd is installed"
     ],
     "remediation": "Install the `auditd` package.",
-    "sca_check_id": 10040
+    "finding_type": "configuration_noncompliance",
+    "description": "auditd should be installed to collect audit events.",
+    "impact": "Without auditd, audit event collection is incomplete.",
+    "detection_method": "Wazuh SCA policy cis_ubuntu24-04",
+    "sca_check_id": 35680
   },
   {
     "host": "target1",

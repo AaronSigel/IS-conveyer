@@ -14,7 +14,7 @@ from jinja2 import Environment, FileSystemLoader
 PROJECT_ROOT = pathlib.Path(__file__).resolve().parents[1]
 DEFAULT_FINDINGS = PROJECT_ROOT / "artifacts" / "unified-findings.json"
 DEFAULT_OUTPUT = PROJECT_ROOT / "artifacts" / "draft-report.md"
-DEFAULT_PROFILE = PROJECT_ROOT / "profiles" / "host-baseline-v1.yml"
+DEFAULT_PROFILE = PROJECT_ROOT / "profiles" / "cis_ubuntu24-04.yml"
 DEFAULT_METADATA = PROJECT_ROOT / "config" / "report-metadata.yml"
 DEFAULT_ENRICHMENT = PROJECT_ROOT / "config" / "finding-enrichment.yml"
 TEMPLATES_DIR = PROJECT_ROOT / "report" / "templates"

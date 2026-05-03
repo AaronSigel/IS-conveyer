@@ -81,7 +81,7 @@ fi
 
 python3 scripts/generate-report.py \
   --findings "${UNIFIED_PATH}" \
-  --profile profiles/host-baseline-v1.yml \
+  --profile profiles/cis_ubuntu24-04.yml \
   --metadata config/report-metadata.yml \
   --output "${REPORT_PATH}"
 

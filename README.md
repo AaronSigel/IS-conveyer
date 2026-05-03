@@ -9,8 +9,8 @@
 - поднимает 3 виртуальные машины через `Vagrant`;
 - настраивается `Ansible` с хоста;
 - разворачивает `Wazuh manager`, `Wazuh agents`, `Wazuh API`, `Wazuh indexer` и `Wazuh dashboard`;
-- доставляет custom Wazuh SCA policy `host-baseline-v1`;
-- проверяет расширенный профиль Ubuntu 24.04: SSH hardening, UFW firewall, права файлов, denylist-пакеты, audit/logging и time sync;
+- включает встроенную Wazuh SCA policy `cis_ubuntu24-04`;
+- проверяет CIS Ubuntu Linux 24.04 LTS Benchmark v1.0.0;
 - позволяет автономно пройти путь от старта VM до готового markdown-отчёта.
 
 ## Зависимости
@@ -137,7 +137,6 @@ powershell -ExecutionPolicy Bypass -File .\scripts\windows\e2e.ps1 -SkipSmokeTes
 ./scripts/up.sh
 ./scripts/provision.sh
 ./scripts/smoke-test.sh
-python scripts/validate-profile.py profiles/host-baseline-v1.yml
 ./scripts/run-host-scan.py
 ./scripts/collect-report.sh
 ```
@@ -149,8 +148,6 @@ powershell -ExecutionPolicy Bypass -File .\scripts\windows\up.ps1
 powershell -ExecutionPolicy Bypass -File .\scripts\windows\provision.ps1
 powershell -ExecutionPolicy Bypass -File .\scripts\windows\smoke-test.ps1
 ```
-
-Проверку профиля выполните в WSL той же командой `python3 scripts/validate-profile.py ...` (отдельной обёртки `.ps1` нет).
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\windows\run-host-scan.ps1
@@ -259,7 +256,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\windows\scan-and-report.ps1
 ```bash
 python scripts/generate-report.py \
   --findings artifacts/unified-findings.json \
-  --profile profiles/host-baseline-v1.yml \
+  --profile profiles/cis_ubuntu24-04.yml \
   --metadata config/report-metadata.yml \
   --output report/technical-report.md \
   --status failed \

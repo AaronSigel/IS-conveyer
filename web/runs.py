@@ -12,7 +12,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 ARTIFACTS_DIR = PROJECT_ROOT / "artifacts"
 RUNS_DIR = ARTIFACTS_DIR / "runs"
 LATEST_PATH = ARTIFACTS_DIR / "latest.json"
-PROFILE_ID = "host-baseline-v1"
+PROFILE_ID = "cis_ubuntu24-04"
 PROFILE_PATH = PROJECT_ROOT / "profiles" / f"{PROFILE_ID}.yml"
 SAFE_COMPONENT = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 

@@ -58,7 +58,7 @@
 ```bash
 python scripts/generate-report.py \
   --findings artifacts/unified-findings.json \
-  --profile profiles/host-baseline-v1.yml \
+  --profile profiles/cis_ubuntu24-04.yml \
   --metadata config/report-metadata.yml \
   --output report/technical-report.md \
   --status failed \
@@ -83,7 +83,7 @@ python scripts/generate-report.py \
 
 ## Mapping Finding -> Passport
 
-Для SCA findings используется тип `configuration_noncompliance`. Способ обнаружения формируется как `Wazuh SCA check <sca_check_id>`, CVSS считается неприменимым. Если в профиле у правила есть блок `passport`, из него берутся класс уязвимости, тип недостатка, affected component, location, impact, detection method и external IDs.
+Для SCA findings используется тип `configuration_noncompliance`. Способ обнаружения формируется как `Wazuh SCA check <sca_check_id>` или `Wazuh SCA policy cis_ubuntu24-04`, CVSS считается неприменимым. Для CIS checks паспорт строится из полей finding, полученных от Wazuh, и безопасных fallback-значений.
 
 Для CVE findings с `source == wazuh_vulnerability`, `source == wazuh-indexer-vulnerabilities` или `finding_type == software_vulnerability` используется класс `Уязвимость программного обеспечения`. Наименование ПО и версия берутся из `affected_component` или evidence `Package: ...`; CVE берётся из `external_ids.cve`, `finding.cve`, `rule_id` или evidence; CVSS берётся из `finding.cvss` или evidence `CVSS base: ...`.
 

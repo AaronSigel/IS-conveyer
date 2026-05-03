@@ -1,5 +1,5 @@
 project_name: ib-host-audit-poc
-profile_name: host-baseline-v1
+profile_name: cis_ubuntu24-04
 wazuh_manager_ip: 192.168.56.10
 wazuh_host_access_ip: "{{ lookup('env', 'WINDOWS_HOST_IP') | default('127.0.0.1', true) }}"
 wazuh_manager_hostname: wazuh
@@ -24,9 +24,7 @@ wazuh_indexer_user: admin
 wazuh_indexer_password_file: "{{ wazuh_artifacts_dir }}/wazuh-indexer-password.txt"
 wazuh_credentials_env_file: "{{ wazuh_artifacts_dir }}/wazuh-credentials.env"
 wazuh_shared_group: default
-sca_policy_relpath: "etc/custom/{{ profile_name }}-sca.yml"
-sca_policy_remote_path: "/var/ossec/etc/shared/default/{{ profile_name }}-sca.yml"
-wazuh_agent_local_sca_policy_path: "/var/ossec/{{ sca_policy_relpath }}"
+sca_policy_relpath: "ruleset/sca/ubuntu/cis_ubuntu24-04.yml"
 wazuh_agent_local_config_block_marker: "IB HOST AUDIT POC SCA"
 target_baseline_state: drifting
 target_baseline_drift_packages:

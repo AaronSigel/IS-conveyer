@@ -7,6 +7,6 @@ PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 cd "${PROJECT_ROOT}"
 python3 scripts/generate-report.py \
   --findings report/samples/sample-findings.json \
-  --profile profiles/host-baseline-v1.yml \
+  --profile profiles/cis_ubuntu24-04.yml \
   --metadata config/report-metadata.yml \
   --output artifacts/sample-draft-report.md

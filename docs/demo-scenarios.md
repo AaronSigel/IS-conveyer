@@ -37,15 +37,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\windows\scan-and-report.ps1
 - raw vulnerabilities сохраняются в `artifacts/raw-wazuh-vulnerabilities.json`;
 - черновой отчёт сохраняется в `artifacts/draft-report.md`;
 - findings формируются из `Wazuh API` и `Wazuh indexer`.
-- SCA findings включают SSH hardening, firewall, file permissions, denylist packages, audit/logging и time sync.
-
-Профиль можно проверить до запуска стенда:
-
-```bash
-python scripts/validate-profile.py profiles/host-baseline-v1.yml
-```
-
-Под Windows отдельной обёртки `.ps1` нет; выполните ту же команду внутри WSL из каталога репозитория.
+- SCA findings формируются из policy `cis_ubuntu24-04` (`CIS Ubuntu Linux 24.04 LTS Benchmark v1.0.0`).
 
 ## Сценарий 2a. Отдельный отчёт по выбранному хосту
 

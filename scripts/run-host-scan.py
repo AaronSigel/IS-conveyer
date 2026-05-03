@@ -20,7 +20,7 @@ ARTIFACTS_DIR = PROJECT_ROOT / "artifacts"
 CREDS_PATH = ARTIFACTS_DIR / "wazuh-credentials.env"
 INVENTORY_PATH = PROJECT_ROOT / "ansible" / "inventory" / "hosts.ini"
 DEFAULT_TARGETS = ("target1", "target2")
-SCA_POLICY_ID = "host-baseline-v1"
+SCA_POLICY_ID = "cis_ubuntu24-04"
 COMMAND_TIMEOUT_SECONDS = 180
 API_TIMEOUT_SECONDS = 30
 

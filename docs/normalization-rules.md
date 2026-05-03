@@ -82,7 +82,7 @@
 
 ## Mapping Vulnerabilities
 
-Для vulnerability findings `scripts/export-findings.py` читает список `vulnerabilities` из `profiles/host-baseline-v1.yml`.
+Для vulnerability findings `scripts/export-findings.py` читает список `vulnerabilities` из `profiles/cis_ubuntu24-04.yml`.
 
 - `cve` используется как фильтр `vulnerability.id` в запросе к `wazuh-states-vulnerabilities*`;
 - `packages`, если задан, дополнительно фильтрует `package.name`;
@@ -100,39 +100,19 @@
 
 ## Mapping SCA
 
-Для SCA findings `scripts/export-findings.py` читает metadata из `profiles/host-baseline-v1.yml`:
+Для SCA findings `scripts/export-findings.py` читает checks из Wazuh policy `cis_ubuntu24-04`:
 
-- `sca_check_id` -> Wazuh SCA `id`;
-- `id` -> итоговый `rule_id`;
-- `title`, `category`, `severity`, `remediation` -> одноимённые поля finding.
+- Wazuh SCA `id` -> `sca_check_id`;
+- `cis_ubuntu24-04:<id>` -> итоговый `rule_id`;
+- `title`, `description`, `rationale`, `remediation`, `result`, `compliance` берутся из ответа Wazuh API;
+- `category` фиксируется как `configuration`;
+- `finding_type` фиксируется как `configuration_noncompliance`;
+- при отсутствии severity exporter использует `medium`.
 
-Это означает, что при добавлении правила нужно синхронно обновить профиль и SCA policy. Явная таблица `check_id -> rule_id` в exporter больше не поддерживается вручную.
+Custom allowlist для SCA checks не используется: в основной экспорт попадают все checks, которые вернул `/sca/{agent_id}/checks/cis_ubuntu24-04`.
 
 В отчёте SCA findings преобразуются в паспорта типа `configuration_noncompliance`, если тип не задан явно:
 
 - CVSS: `не применимо`;
 - способ обнаружения: `Wazuh SCA check <sca_check_id>` при наличии ID;
-- metadata паспорта берётся из блока `passport` соответствующего правила профиля;
 - при отсутствии passport metadata используются данные finding, затем безопасные fallback-значения.
-
-Текущий профиль добавляет 17 SCA checks:
-
-| SCA ID | Rule ID | Категория | Severity |
-| --- | --- | --- | --- |
-| 10001 | `SSH_ROOT_LOGIN_DISABLED` | configuration | high |
-| 10002 | `SSH_PASSWORD_AUTH_DISABLED` | configuration | high |
-| 10003 | `SSH_EMPTY_PASSWORDS_DISABLED` | configuration | high |
-| 10004 | `SSH_X11_FORWARDING_DISABLED` | configuration | medium |
-| 10005 | `SSH_MAX_AUTH_TRIES_LIMITED` | configuration | medium |
-| 10010 | `FIREWALL_UFW_ENABLED` | configuration | high |
-| 10011 | `FIREWALL_DEFAULT_DENY_INCOMING` | configuration | high |
-| 10020 | `SHADOW_FILE_PERMISSIONS_SECURE` | configuration | high |
-| 10021 | `SSHD_CONFIG_PERMISSIONS_SECURE` | configuration | medium |
-| 10022 | `DEMO_SENSITIVE_FILE_PERMISSIONS_SECURE` | configuration | medium |
-| 10030 | `TELNET_PACKAGE_ABSENT` | software | medium |
-| 10031 | `RSH_PACKAGE_ABSENT` | software | medium |
-| 10032 | `FTP_SERVER_ABSENT` | software | medium |
-| 10040 | `AUDITD_INSTALLED` | configuration | medium |
-| 10041 | `AUDITD_SERVICE_ENABLED` | configuration | medium |
-| 10042 | `RSYSLOG_SERVICE_ACTIVE` | configuration | low |
-| 10050 | `TIME_SYNC_ENABLED` | configuration | medium |

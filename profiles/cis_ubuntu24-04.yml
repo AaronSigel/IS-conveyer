@@ -1,0 +1,163 @@
+profile: CIS Ubuntu Linux 24.04 LTS Benchmark v1.0.0
+metadata:
+  version: 1
+  policy_id: cis_ubuntu24-04
+  policy_file: cis_ubuntu24-04.yml
+  source: Wazuh built-in SCA policy
+
+vulnerabilities:
+  - id: VULN_OPENSSH_CVE_2024_6387
+    cve: CVE-2024-6387
+    title: OpenSSH regreSSHion remote code execution
+    severity: high
+    cvss:
+      base_score: 8.1
+      vector: CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:H/A:H
+    remediation: Update openssh-server to the fixed Ubuntu 24.04 package version or later.
+    packages:
+      - openssh-server
+
+  - id: VULN_OPENSSH_CVE_2024_39894
+    cve: CVE-2024-39894
+    title: OpenSSH ObscureKeystrokeTiming information exposure
+    severity: medium
+    cvss:
+      base_score: 7.5
+      vector: CVSS:3.1/AV:N/AC:H/PR:N/UI:R/S:U/C:H/I:H/A:H
+    remediation: Update OpenSSH client and server packages to the fixed Ubuntu 24.04 package version or later.
+    packages:
+      - openssh-client
+      - openssh-server
+
+  - id: VULN_OPENSSL_CVE_2024_2511
+    cve: CVE-2024-2511
+    title: OpenSSL TLSv1.3 session resource exhaustion
+    severity: medium
+    cvss:
+      base_score: 5.9
+      vector: CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:N/I:N/A:H
+    remediation: Update libssl3t64 and openssl to the fixed Ubuntu 24.04 package version or later.
+    packages:
+      - libssl3t64
+      - openssl
+
+  - id: VULN_OPENSSL_CVE_2024_4603
+    cve: CVE-2024-4603
+    title: OpenSSL excessive DSA key validation denial of service
+    severity: medium
+    cvss:
+      base_score: 5.3
+      vector: CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:L
+    remediation: Update libssl3t64 and openssl to the fixed Ubuntu 24.04 package version or later.
+    packages:
+      - libssl3t64
+      - openssl
+
+  - id: VULN_OPENSSL_CVE_2024_4741
+    cve: CVE-2024-4741
+    title: OpenSSL rarely-used API memory handling flaw
+    severity: high
+    cvss:
+      base_score: 7.5
+      vector: CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H
+    remediation: Update libssl3t64 and openssl to the fixed Ubuntu 24.04 package version or later.
+    packages:
+      - libssl3t64
+      - openssl
+
+  - id: VULN_OPENSSL_CVE_2024_5535
+    cve: CVE-2024-5535
+    title: OpenSSL ALPN buffer handling information exposure
+    severity: medium
+    cvss:
+      base_score: 9.1
+      vector: CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:H
+    remediation: Update libssl3t64 and openssl to the fixed Ubuntu 24.04 package version or later.
+    packages:
+      - libssl3t64
+      - openssl
+
+  - id: VULN_OPENSSL_CVE_2024_6119
+    cve: CVE-2024-6119
+    title: OpenSSL X.509 certificate validation flaw
+    severity: medium
+    cvss:
+      base_score: 7.5
+      vector: CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H
+    remediation: Update libssl3t64 and openssl to the fixed Ubuntu 24.04 package version or later.
+    packages:
+      - libssl3t64
+      - openssl
+
+  - id: VULN_CURL_CVE_2024_7264
+    cve: CVE-2024-7264
+    title: curl ASN.1 Generalized Time parsing flaw
+    severity: medium
+    cvss:
+      base_score: 6.5
+      vector: CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:U/C:N/I:N/A:H
+    remediation: Update curl and libcurl packages to the fixed Ubuntu 24.04 package version or later.
+    packages:
+      - curl
+      - libcurl4t64
+      - libcurl3t64-gnutls
+
+  - id: VULN_CURL_CVE_2024_8096
+    cve: CVE-2024-8096
+    title: curl OCSP stapling certificate check flaw
+    severity: medium
+    cvss:
+      base_score: 6.5
+      vector: CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:L/A:N
+    remediation: Update curl and libcurl packages to the fixed Ubuntu 24.04 package version or later.
+    packages:
+      - curl
+      - libcurl4t64
+      - libcurl3t64-gnutls
+
+  - id: VULN_CURL_CVE_2024_9681
+    cve: CVE-2024-9681
+    title: curl HSTS cache information exposure
+    severity: medium
+    cvss:
+      base_score: 6.5
+      vector: CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:N/I:H/A:L
+    remediation: Update curl and libcurl packages to the fixed Ubuntu 24.04 package version or later.
+    packages:
+      - curl
+      - libcurl4t64
+      - libcurl3t64-gnutls
+
+  - id: VULN_SUDO_CVE_2025_32462
+    cve: CVE-2025-32462
+    title: Sudo host restriction bypass
+    severity: high
+    cvss:
+      base_score: 2.8
+      vector: CVSS:3.1/AV:L/AC:H/PR:L/UI:N/S:C/C:N/I:L/A:N
+    remediation: Update sudo to the fixed Ubuntu 24.04 package version or later.
+    packages:
+      - sudo
+
+  - id: VULN_SUDO_CVE_2025_32463
+    cve: CVE-2025-32463
+    title: Sudo chroot option local privilege escalation
+    severity: critical
+    cvss:
+      base_score: 7.8
+      vector: CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:H
+    remediation: Update sudo to the fixed Ubuntu 24.04 package version or later.
+    packages:
+      - sudo
+
+  - id: VULN_VIM_CVE_2024_47814
+    cve: CVE-2024-47814
+    title: Vim use-after-free denial of service
+    severity: medium
+    cvss:
+      base_score: 3.9
+      vector: CVSS:3.1/AV:L/AC:L/PR:L/UI:R/S:U/C:N/I:L/A:L
+    remediation: Update vim to the fixed Ubuntu 24.04 package version or later.
+    packages:
+      - vim
+      - vim-common

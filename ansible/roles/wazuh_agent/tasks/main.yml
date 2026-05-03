@@ -183,7 +183,7 @@
     group: wazuh
     mode: "{{ wazuh_agent_shared_dir_mode }}"
 
-- name: Allow remote command execution for custom SCA checks
+- name: Allow remote command execution for CIS SCA checks
   ansible.builtin.lineinfile:
     path: "{{ wazuh_agent_local_internal_options_path }}"
     regexp: '^sca\.remote_commands='
@@ -194,28 +194,11 @@
     create: true
   notify: Restart Wazuh agent
 
-- name: Ensure local custom policy directory exists on the agent
-  ansible.builtin.file:
-    path: "{{ wazuh_agent_local_sca_policy_path | dirname }}"
-    state: directory
-    owner: root
-    group: wazuh
-    mode: "0750"
-
 - name: Disable agent-side syscheck for the lightweight PoC profile
   ansible.builtin.replace:
     path: /var/ossec/etc/ossec.conf
     regexp: '(<syscheck>\s*<disabled>)no(</disabled>)'
     replace: '\1yes\2'
-  notify: Restart Wazuh agent
-
-- name: Deploy local SCA policy to the agent
-  ansible.builtin.template:
-    src: host-baseline-v1-sca.yml.j2
-    dest: "{{ wazuh_agent_local_sca_policy_path }}"
-    owner: root
-    group: wazuh
-    mode: "0640"
   notify: Restart Wazuh agent
 
 - name: Inject local Wazuh config block for fast SCA and inventory scans

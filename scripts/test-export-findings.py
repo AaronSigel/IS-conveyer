@@ -80,3 +80,33 @@ def test_vulnerability_pass_findings_skip_failed_host_rule_pairs():
     assert len(findings) == 1
     assert findings[0]["host"] == "target2"
     assert findings[0]["status"] == "pass"
+
+
+def test_cis_sca_findings_do_not_require_custom_profile_mapping():
+    export_findings = load_export_findings()
+    findings = export_findings.normalize_sca_findings(
+        "target1",
+        [
+            {
+                "id": 35500,
+                "title": "1.1.1.1 Ensure cramfs kernel module is not available (Automated)",
+                "description": "Disable cramfs.",
+                "rationale": "Uncommon filesystems should be disabled.",
+                "remediation": "Add install cramfs /bin/false to a modprobe config file.",
+                "result": "failed",
+                "command": "modprobe -n -v cramfs",
+                "compliance": [{"cis": ["1.1.1.1"]}],
+                "rules": [{"rule": "c:modprobe -n -v cramfs -> r:^install /bin/false"}],
+            }
+        ],
+    )
+
+    assert len(findings) == 1
+    finding = findings[0]
+    assert finding["source"] == "wazuh_sca"
+    assert finding["rule_id"] == "cis_ubuntu24-04:35500"
+    assert finding["sca_check_id"] == 35500
+    assert finding["title"].startswith("1.1.1.1 Ensure cramfs")
+    assert finding["status"] == "fail"
+    assert finding["finding_type"] == "configuration_noncompliance"
+    assert any("Compliance: cis: 1.1.1.1" == item for item in finding["evidence"])

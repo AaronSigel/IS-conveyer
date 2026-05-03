@@ -10,7 +10,7 @@ import tempfile
 PROJECT_ROOT = pathlib.Path(__file__).resolve().parents[1]
 GENERATOR = PROJECT_ROOT / "scripts" / "generate-report.py"
 SAMPLE_FINDINGS = PROJECT_ROOT / "report" / "samples" / "sample-findings.json"
-PROFILE = PROJECT_ROOT / "profiles" / "host-baseline-v1.yml"
+PROFILE = PROJECT_ROOT / "profiles" / "cis_ubuntu24-04.yml"
 METADATA = PROJECT_ROOT / "config" / "report-metadata.yml"
 FORBIDDEN = ("РЕФЕРАТ", "СОДЕРЖАНИЕ", "ПРИЛОЖЕНИЯ", "СВОДНАЯ ТАБЛИЦА", "ПЛАН УСТРАНЕНИЯ")
 
@@ -70,7 +70,7 @@ def render_sample_html():
         "filters": {"status": {"op": "in", "value": ["fail"]}},
         "result_summary": {"total_findings_after_filter": len(filtered), "fail": len(filtered), "high": 1},
     }
-    metadata = {"id": "run-test", "status": "completed", "hosts": ["target1"], "profile_id": "host-baseline-v1"}
+    metadata = {"id": "run-test", "status": "completed", "hosts": ["target1"], "profile_id": "cis_ubuntu24-04"}
     return module.render_report_html(metadata, export, findings, module.normalize_findings(filtered))
 
 
@@ -87,13 +87,13 @@ def main():
         assert "Нормализованный severity | critical" in full_report
 
         high_report = run_report(tmpdir / "high.md", "--severity", "high")
-        assert "Запрет входа root по SSH" in high_report
-        assert "Запрет X11 forwarding" not in high_report
+        assert "Ensure cramfs kernel module is not available" in high_report
+        assert "Ensure X11 forwarding is disabled" not in high_report
         assert "Sudo chroot option" not in high_report
         assert high_report.count("### 5.") == 1
 
         failed_report = run_report(tmpdir / "failed.md", "--status", "failed")
-        assert "auditd установлен" not in failed_report
+        assert "Ensure auditd is installed" not in failed_report
         assert failed_report.count("### 5.") == 3
         assert_passport_format(failed_report, 3)
         assert "Применённые фильтры: статус = fail." in failed_report

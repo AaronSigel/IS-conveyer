@@ -761,15 +761,6 @@
     mode: "0640"
   notify: Restart wazuh-manager
 
-- name: Deploy custom SCA policy to shared directory
-  ansible.builtin.template:
-    src: host-baseline-v1-sca.yml.j2
-    dest: "{{ sca_policy_remote_path }}"
-    owner: wazuh
-    group: wazuh
-    mode: "0640"
-  notify: Restart wazuh-manager
-
 - name: Flush handler to publish shared configuration
   ansible.builtin.meta: flush_handlers
 

@@ -80,7 +80,7 @@
 - Используемые API endpoints:
   - `/security/user/authenticate`
   - `/agents`
-  - `/sca/{agent_id}/checks/host-baseline-v1`
+  - `/sca/{agent_id}/checks/cis_ubuntu24-04`
   - `/syscollector/{agent_id}/os`
   - `/syscollector/{agent_id}/packages`
 - Результаты нормализуются в unified JSON.
@@ -129,7 +129,7 @@
 ### Agents
 
 - `target1` и `target2` регистрируются как active agents
-- На агентах выполняется custom policy `host-baseline-v1`
+- На агентах выполняется встроенная CIS policy `cis_ubuntu24-04`
 
 ## Подтверждённые проверки
 
@@ -209,12 +209,11 @@ Wazuh agent:
 
 - `ansible/roles/wazuh_agent/tasks/main.yml`
 - `ansible/roles/wazuh_agent/defaults/main.yml`
-- `ansible/roles/wazuh_agent/templates/host-baseline-v1-sca.yml.j2`
 
 Baseline and remediation:
 
 - `ansible/roles/target_baseline/tasks/main.yml`
-- `profiles/host-baseline-v1.yml`
+- `profiles/cis_ubuntu24-04.yml`
 
 Экспорт и отчёты:
 

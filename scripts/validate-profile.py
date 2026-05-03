@@ -17,9 +17,11 @@ def validate_profile(path):
     if not isinstance(data, dict):
         raise ValueError("Profile YAML must be a mapping")
 
-    checks = data.get("checks")
-    if not isinstance(checks, list) or not checks:
-        raise ValueError("Profile must contain a non-empty checks list")
+    checks = data.get("checks", [])
+    if checks is None:
+        checks = []
+    if not isinstance(checks, list):
+        raise ValueError("checks must be a list")
 
     rule_ids = set()
     sca_check_ids = set()
@@ -106,6 +108,9 @@ def validate_profile(path):
                 vector = cvss.get("vector")
                 if vector is not None and (not isinstance(vector, str) or not vector):
                     errors.append(f"vulnerability #{index}: cvss.vector must be a non-empty string")
+
+    if not checks and not vulnerabilities:
+        errors.append("Profile must contain at least one check or vulnerability")
 
     if errors:
         raise ValueError("\n".join(errors))

@@ -1,6 +1,8 @@
 # Формат профиля
 
-Профиль описывается YAML-файлом верхнего уровня со следующими блоками:
+Основной SCA pipeline больше не использует кастомный профиль правил. Для Ubuntu 24.04 он опирается на встроенную Wazuh policy `cis_ubuntu24-04` (`CIS Ubuntu Linux 24.04 LTS Benchmark v1.0.0`), а файл `profiles/cis_ubuntu24-04.yml` содержит только metadata для отчётов.
+
+Legacy-профиль описывается YAML-файлом верхнего уровня со следующими блоками:
 
 - `profile`: идентификатор и версия профиля;
 - `metadata`: назначение, владелец и комментарии;
@@ -20,7 +22,7 @@
 - `remediation`: направление исправления;
 - `sca_check_id`: числовой id соответствующего Wazuh SCA check.
 
-Профиль `host-baseline-v1` покрывает:
+Удалённый legacy-профиль покрывал:
 
 - SSH hardening: root login, password authentication, empty passwords, X11 forwarding, MaxAuthTries;
 - firewall: активный UFW и default deny incoming;
@@ -65,12 +67,12 @@ vulnerabilities:
 
 ## Связь С Wazuh SCA
 
-Каждое правило профиля имеет пару в SCA policy `host-baseline-v1-sca.yml`. В `compliance.custom` SCA check указывается `id` правила из профиля, а `sca_check_id` профиля совпадает с `id` SCA check.
+Для основного pipeline соответствие берётся из Wazuh CIS policy напрямую. Exporter опрашивает `/sca/{agent_id}/checks/cis_ubuntu24-04`, формирует `rule_id` как `cis_ubuntu24-04:<sca_check_id>` и не требует `compliance.custom`.
 
-Перед запуском стенда профиль можно проверить локально:
+Текущий CIS metadata profile можно проверить локально:
 
 ```bash
-python scripts/validate-profile.py profiles/host-baseline-v1.yml
+python scripts/validate-profile.py profiles/cis_ubuntu24-04.yml
 ```
 
 Smoke-check проверяет:
@@ -92,7 +94,7 @@ Smoke-check проверяет:
 - `severity`: уровень критичности;
 - `remediation`: направление исправления.
 
-Для текущего Wazuh-only pipeline authoritative mapping берётся из `id`, `category`, `severity`, `remediation` и `sca_check_id`.
+Для текущего Wazuh-only SCA pipeline authoritative mapping берётся из ответа Wazuh CIS policy, а не из legacy-профиля.
 
 ## Правила расширения
 

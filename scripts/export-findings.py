@@ -22,10 +22,11 @@ DEFAULT_ALERTS_OUTPUT = ARTIFACTS_DIR / "raw-wazuh-alerts.json"
 DEFAULT_VULNS_OUTPUT = ARTIFACTS_DIR / "raw-wazuh-vulnerabilities.json"
 CREDS_PATH = ARTIFACTS_DIR / "wazuh-credentials.env"
 SCHEMA_PATH = PROJECT_ROOT / "report" / "schema" / "finding.schema.json"
-PROFILE_PATH = PROJECT_ROOT / "profiles" / "host-baseline-v1.yml"
+PROFILE_PATH = PROJECT_ROOT / "profiles" / "cis_ubuntu24-04.yml"
 
 DEFAULT_TARGETS = ("target1", "target2")
-SCA_POLICY_ID = "host-baseline-v1"
+SCA_POLICY_ID = "cis_ubuntu24-04"
+SCA_POLICY_NAME = "CIS Ubuntu Linux 24.04 LTS Benchmark v1.0.0"
 DEFAULT_VAGRANT_PRIVATE_KEY = os.environ.get("VAGRANT_INSECURE_PRIVATE_KEY", "~/.vagrant.d/insecure_private_key")
 DENYLIST_PACKAGES = ("telnet", "telnetd", "rsh-client", "rsh-redone-client", "rsh-server", "vsftpd", "proftpd", "pure-ftpd")
 
@@ -258,7 +259,7 @@ def build_inventory_lookup(client, targets):
 
 
 def fetch_sca_checks(client, agent_id):
-    response = client.get(f"/sca/{agent_id}/checks/{SCA_POLICY_ID}", params={"limit": 100})
+    response = client.get(f"/sca/{agent_id}/checks/{SCA_POLICY_ID}", params={"limit": 1000})
     return response.get("data", {}).get("affected_items", []), response
 
 
@@ -272,15 +273,32 @@ def fetch_syscollector_packages(client, agent_id, package_name):
     return response.get("data", {}).get("affected_items", []), response
 
 
-def normalize_sca_findings(host, sca_checks, sca_rules):
+def compliance_values(compliance):
+    values = []
+    for item in compliance or []:
+        if isinstance(item, dict):
+            for key, value in item.items():
+                if isinstance(value, list):
+                    rendered = ", ".join(str(part) for part in value)
+                else:
+                    rendered = str(value)
+                values.append(f"{key}: {rendered}")
+        elif item:
+            values.append(str(item))
+    return values
+
+
+def sca_rule_id(check_id):
+    return f"{SCA_POLICY_ID}:{check_id}" if check_id is not None else SCA_POLICY_ID
+
+
+def normalize_sca_findings(host, sca_checks, sca_rules=None):
     findings = []
     for item in sca_checks:
-        rule_meta = sca_rules.get(item.get("id"))
-        if not rule_meta:
-            continue
         status = normalize_sca_result(item.get("result"))
         if not status:
             continue
+        check_id = item.get("id")
         evidence = []
         command = item.get("command")
         if command:
@@ -290,17 +308,25 @@ def normalize_sca_findings(host, sca_checks, sca_rules):
         rule_texts = [rule["rule"] for rule in item.get("rules", []) if rule.get("rule")]
         if rule_texts:
             evidence.append(f"Rules: {'; '.join(rule_texts)}")
+        compliance = compliance_values(item.get("compliance"))
+        if compliance:
+            evidence.append(f"Compliance: {'; '.join(compliance)}")
         findings.append(
             {
                 "host": host,
                 "source": "wazuh_sca",
-                "category": rule_meta["category"],
-                "rule_id": rule_meta["rule_id"],
-                "title": rule_meta["title"],
-                "severity": rule_meta["severity"],
+                "category": "configuration",
+                "rule_id": sca_rule_id(check_id),
+                "title": item.get("title") or f"{SCA_POLICY_NAME} check {check_id}",
+                "severity": normalize_severity(item.get("severity")),
                 "status": status,
                 "evidence": evidence or [f"SCA result: {item.get('result', 'unknown')}"],
-                "remediation": item.get("remediation") or rule_meta["remediation"],
+                "remediation": item.get("remediation") or "Follow the CIS Ubuntu Linux 24.04 LTS Benchmark remediation guidance for this check.",
+                "finding_type": "configuration_noncompliance",
+                "description": item.get("description") or item.get("rationale"),
+                "impact": item.get("rationale"),
+                "detection_method": f"Wazuh SCA policy {SCA_POLICY_ID}",
+                "sca_check_id": check_id,
             }
         )
     return findings
