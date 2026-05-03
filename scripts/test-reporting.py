@@ -31,6 +31,10 @@ def configuration_raw():
     return [item for item in sample_findings() if item.get("finding_type") == "configuration_noncompliance"][0]
 
 
+def verification_commands(group):
+    return [step["command"] for step in group["verification"]]
+
+
 def test_package_normalization():
     finding = normalize_package_finding(package_raw())
     assert finding["type"] == "software_vulnerability"
@@ -70,6 +74,58 @@ def test_configuration_asset_metadata():
     assert asset["host.os.kernel"] == "6.8.0-106-generic"
 
 
+def test_asset_enrichment_prefers_wazuh_inventory():
+    raw = copy.deepcopy(configuration_raw())
+    raw["agent"] = {"id": "001", "name": "target1", "version": "v4.14.5"}
+    raw["host_os"] = {
+        "full": "6.8.0-106-generic",
+        "version": "unknown",
+        "kernel": "unknown",
+    }
+    enrichment = {
+        "agents": {
+            "data": {
+                "affected_items": [
+                    {
+                        "id": "001",
+                        "name": "target1",
+                        "version": "v4.14.5",
+                        "ip": "192.168.56.11",
+                        "status": "active",
+                        "labels": {"env": "lab"},
+                    }
+                ]
+            }
+        },
+        "syscollector_os": {
+            "target1": {
+                "data": {
+                    "affected_items": [
+                        {
+                            "os": {
+                                "full": "Ubuntu 24.04.4 LTS (Noble Numbat)",
+                                "version": "24.04.4",
+                                "kernel": "6.8.0-106-generic",
+                                "architecture": "x86_64",
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+    }
+    report = build_normalized_report([raw], filtered_findings=[raw], asset_enrichment=enrichment)
+    asset = report["scope"]["assets"][0]
+    assert asset["agent.id"] == "001"
+    assert asset["agent.ip"] == "192.168.56.11"
+    assert asset["agent.status"] == "active"
+    assert asset["agent.labels"] == ["env=lab"]
+    assert asset["agent.version"] == "v4.14.5"
+    assert asset["host.os.full"] == "Ubuntu 24.04.4 LTS (Noble Numbat)"
+    assert asset["host.os.kernel"] == "6.8.0-106-generic"
+    assert asset["host.architecture"] == "x86_64"
+
+
 def test_package_deduplication_across_hosts():
     raw = package_raw()
     target1 = normalize_package_finding(raw)
@@ -102,7 +158,7 @@ def test_priority_and_remediation_groups():
     groups = build_remediation_groups([package, config])
     assert {group["action_type"] for group in groups} == {"package_update", "config_change"}
     assert any("sudo apt install --only-upgrade sudo" in group["commands"] for group in groups)
-    assert any("modprobe -n -v cramfs" in group["verification"] for group in groups)
+    assert any("modprobe -n -v cramfs" in verification_commands(group) for group in groups)
 
 
 def test_remediation_knowledge_base_verification():
@@ -125,10 +181,10 @@ def test_remediation_knowledge_base_verification():
     groups = build_remediation_groups([aide, core])
     aide_group = next(group for group in groups if group["title"] == "Configure AIDE integrity monitoring")
     core_group = next(group for group in groups if group["title"] == "Disable and harden core dump handling")
-    assert "findmnt -kn /tmp" not in "\n".join(aide_group["verification"])
-    assert "dpkg -s aide aide-common" in aide_group["verification"]
-    assert "modprobe -n -v" not in "\n".join(core_group["verification"])
-    assert "sysctl fs.suid_dumpable" in core_group["verification"]
+    assert "findmnt -kn /tmp" not in "\n".join(verification_commands(aide_group))
+    assert "dpkg -s aide aide-common" in verification_commands(aide_group)
+    assert "modprobe -n -v" not in "\n".join(verification_commands(core_group))
+    assert "sysctl fs.suid_dumpable" in verification_commands(core_group)
 
 
 def test_related_package_grouping():
@@ -145,6 +201,123 @@ def test_related_package_grouping():
     assert len(groups) == 1
     assert groups[0]["title"] == "Update openssl packages"
     assert "libssl3 openssl" in " ".join(groups[0]["commands"])
+
+
+def test_engineering_remediation_grouping_and_structured_verification():
+    apparmor_raw = copy.deepcopy(configuration_raw())
+    apparmor_raw["title"] = "1.3.1.2 Ensure AppArmor is enabled in the bootloader configuration"
+    apparmor_raw["remediation"] = "Edit grub so AppArmor is enabled."
+    apparmor_raw["wazuh_sca"]["title"] = apparmor_raw["title"]
+    apparmor_raw["wazuh_sca"]["target"] = "grep apparmor /proc/cmdline"
+    apparmor = normalize_configuration_finding(apparmor_raw)
+
+    chrony_raw = copy.deepcopy(configuration_raw())
+    chrony_raw["title"] = "2.1.1 Ensure chrony is enabled"
+    chrony_raw["remediation"] = "Install and enable chrony."
+    chrony_raw["wazuh_sca"]["title"] = chrony_raw["title"]
+    chrony_raw["wazuh_sca"]["target"] = "systemctl is-enabled chrony"
+    chrony = normalize_configuration_finding(chrony_raw)
+
+    kernel_raw = copy.deepcopy(configuration_raw())
+    kernel_raw["title"] = "1.1.1.9 Ensure dccp kernel module is not available"
+    kernel_raw["remediation"] = "Disable the dccp kernel module."
+    kernel_raw["wazuh_sca"]["title"] = kernel_raw["title"]
+    kernel_raw["wazuh_sca"]["target"] = "modprobe -n -v dccp"
+    kernel = normalize_configuration_finding(kernel_raw)
+
+    groups = build_remediation_groups([apparmor, chrony, kernel])
+    titles = {group["title"] for group in groups}
+    assert "Configure AppArmor mandatory access control" in titles
+    assert "Configure time synchronization" in titles
+    assert "Disable unused kernel modules" in titles
+
+    for group in groups:
+        for step in group["verification"]:
+            assert set(step) >= {"command", "expected_result", "requires_root", "safe_to_run", "manual", "notes"}
+            assert step["command"] != "unknown"
+            assert "<module>" not in step["command"]
+
+    kernel_group = next(group for group in groups if group["title"] == "Disable unused kernel modules")
+    assert "modprobe -n -v dccp" in verification_commands(kernel_group)
+
+
+def test_firewall_backend_filters_conflicting_remediation_paths():
+    ufw_raw = copy.deepcopy(configuration_raw())
+    ufw_raw["title"] = "4.1.3 Ensure ufw loopback traffic is configured"
+    ufw_raw["remediation"] = "Configure UFW loopback rules."
+    ufw_raw["wazuh_sca"]["title"] = ufw_raw["title"]
+    ufw_raw["wazuh_sca"]["target"] = "ufw status verbose"
+
+    nft_raw = copy.deepcopy(configuration_raw())
+    nft_raw["title"] = "4.2.1 Ensure nftables is installed"
+    nft_raw["remediation"] = "Install and enable nftables."
+    nft_raw["wazuh_sca"]["title"] = nft_raw["title"]
+    nft_raw["wazuh_sca"]["target"] = "systemctl is-enabled nftables"
+
+    iptables_raw = copy.deepcopy(configuration_raw())
+    iptables_raw["title"] = "4.3.1 Ensure iptables default deny firewall policy"
+    iptables_raw["remediation"] = "Configure iptables default deny."
+    iptables_raw["wazuh_sca"]["title"] = iptables_raw["title"]
+    iptables_raw["wazuh_sca"]["target"] = "iptables -L"
+
+    report = build_normalized_report(
+        [ufw_raw, nft_raw, iptables_raw],
+        filtered_findings=[ufw_raw, nft_raw, iptables_raw],
+        policy_options={"firewall_backend": "ufw"},
+    )
+    firewall_groups = [group for group in report["remediation_groups"] if "firewall" in group["title"].lower()]
+    assert len(firewall_groups) == 1
+    assert firewall_groups[0]["title"] == "Configure UFW firewall backend"
+    assert len(firewall_groups[0]["affected_findings"]) == 1
+    assert "ufw status verbose" in verification_commands(firewall_groups[0])
+    assert "nft list ruleset" not in verification_commands(firewall_groups[0])
+    assert "iptables -L -n -v" not in verification_commands(firewall_groups[0])
+    assert report["policy_options"]["firewall_backend"] == "ufw"
+
+    disabled_report = build_normalized_report(
+        [ufw_raw, nft_raw, iptables_raw],
+        filtered_findings=[ufw_raw, nft_raw, iptables_raw],
+        policy_options={"firewall_backend": "none"},
+    )
+    assert not [group for group in disabled_report["remediation_groups"] if "firewall" in group["title"].lower()]
+
+
+def test_applicability_exceptions_are_outside_remediation_plan():
+    boot_raw = copy.deepcopy(configuration_raw())
+    boot_raw["title"] = "1.4.2 Ensure bootloader password is set"
+    boot_raw["remediation"] = "Set a GRUB bootloader password."
+    boot_raw["wazuh_sca"]["title"] = boot_raw["title"]
+    boot_raw["wazuh_sca"]["target"] = "grep superusers /boot/grub/grub.cfg"
+
+    audit_partition_raw = copy.deepcopy(configuration_raw())
+    audit_partition_raw["title"] = "1.1.2.4 Ensure separate partition exists for /var/log/audit"
+    audit_partition_raw["remediation"] = "Create a separate partition for /var/log/audit."
+    audit_partition_raw["wazuh_sca"]["title"] = audit_partition_raw["title"]
+    audit_partition_raw["wazuh_sca"]["target"] = "findmnt -kn /var/log/audit"
+
+    report = build_normalized_report(
+        [boot_raw, audit_partition_raw],
+        filtered_findings=[boot_raw, audit_partition_raw],
+    )
+    assert report["findings"] == []
+    assert report["remediation_plan"] == []
+    assert report["summary"]["exceptions"] == 2
+    assert {item["applicability"]["status"] for item in report["exceptions"]} == {"manual_review", "environment_specific"}
+
+    override_report = build_normalized_report(
+        [boot_raw],
+        filtered_findings=[boot_raw],
+        policy_options={
+            "applicability_overrides": {
+                "cis 1.4.2": {
+                    "status": "accepted_risk",
+                    "reason": "Accepted for isolated lab demonstration.",
+                }
+            }
+        },
+    )
+    assert override_report["exceptions"][0]["applicability"]["status"] == "accepted_risk"
+    assert override_report["exceptions"][0]["applicability"]["reason"] == "Accepted for isolated lab demonstration."
 
 
 def test_under_evaluation_is_separate():
@@ -164,11 +337,15 @@ def main():
     test_package_normalization()
     test_configuration_normalization()
     test_configuration_asset_metadata()
+    test_asset_enrichment_prefers_wazuh_inventory()
     test_package_deduplication_across_hosts()
     test_configuration_deduplication_across_hosts()
     test_priority_and_remediation_groups()
     test_remediation_knowledge_base_verification()
     test_related_package_grouping()
+    test_engineering_remediation_grouping_and_structured_verification()
+    test_firewall_backend_filters_conflicting_remediation_paths()
+    test_applicability_exceptions_are_outside_remediation_plan()
     test_under_evaluation_is_separate()
     print("reporting unit tests passed")
 

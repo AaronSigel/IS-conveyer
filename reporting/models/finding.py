@@ -9,4 +9,5 @@ class NormalizedFinding(TypedDict, total=False):
     title: str
     affected_assets: list[str]
     severity: dict[str, Any]
+    applicability: dict[str, Any]
     remediation: dict[str, Any]

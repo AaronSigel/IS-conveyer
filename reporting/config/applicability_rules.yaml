@@ -1,0 +1,40 @@
+rules:
+  - id: bootloader_password_manual_review
+    status: manual_review
+    reason: "Bootloader password policy can affect recovery access and must be confirmed for the environment."
+    title_patterns:
+      - "bootloader password"
+      - "grub password"
+  - id: var_log_audit_partition_environment_specific
+    status: environment_specific
+    reason: "Separate /var/log/audit partitioning depends on storage layout and operational log retention policy."
+    text_patterns:
+      - "/var/log/audit"
+      - "separate partition"
+  - id: remote_log_host_environment_specific
+    status: environment_specific
+    reason: "Remote log forwarding target and transport are environment-specific."
+    text_patterns:
+      - "remote log host"
+      - "remote logging"
+      - "forward logs"
+  - id: journald_upload_environment_specific
+    status: environment_specific
+    reason: "systemd-journal-upload requires an approved collector endpoint and certificate policy."
+    text_patterns:
+      - "systemd-journal-upload"
+      - "journald upload"
+      - "journal upload"
+  - id: time_source_policy_environment_specific
+    status: environment_specific
+    reason: "Approved NTP/chrony sources are defined by local infrastructure policy."
+    text_patterns:
+      - "time server"
+      - "ntp server"
+      - "chrony server"
+  - id: firewall_default_deny_manual_review
+    status: manual_review
+    reason: "Default deny firewall policy can interrupt access and must be checked against the selected firewall backend and required management ports."
+    text_patterns:
+      - "default deny"
+      - "default deny firewall"

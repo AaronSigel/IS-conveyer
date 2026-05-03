@@ -21,6 +21,40 @@ aide:
     - "systemctl is-enabled dailyaidecheck.timer"
     - "systemctl status dailyaidecheck.timer"
   rollback: "Disable dailyaidecheck.timer and remove AIDE only after accepting the loss of file integrity monitoring"
+apparmor:
+  title: "Configure AppArmor mandatory access control"
+  summary: "Install AppArmor, ensure it is enabled at boot, and verify profiles are loaded and enforced"
+  commands:
+    - "sudo apt update"
+    - "sudo apt install apparmor apparmor-utils"
+    - "sudo systemctl enable --now apparmor"
+    - "sudo update-grub"
+  verification:
+    - command: "grep -E 'apparmor=1|security=apparmor' /etc/default/grub /etc/default/grub.d/*.cfg 2>/dev/null || true"
+      expected_result: "Bootloader configuration enables AppArmor"
+      requires_root: false
+      safe_to_run: true
+      manual: false
+      notes: "If this changed, reboot is required before /proc/cmdline reflects it"
+    - command: "grep -E 'apparmor=1|security=apparmor' /proc/cmdline"
+      expected_result: "Running kernel command line enables AppArmor"
+      requires_root: false
+      safe_to_run: true
+      manual: false
+      notes: ""
+    - command: "systemctl is-active apparmor"
+      expected_result: "apparmor service is active"
+      requires_root: false
+      safe_to_run: true
+      manual: false
+      notes: ""
+    - command: "apparmor_status"
+      expected_result: "Profiles are loaded and enforced where required"
+      requires_root: true
+      safe_to_run: true
+      manual: false
+      notes: ""
+  rollback: "Restore previous bootloader and AppArmor package/service state, then reboot if kernel parameters changed"
 core_dumps:
   title: "Disable and harden core dump handling"
   summary: "Disable or restrict core dumps through systemd-coredump, sysctl, and limits configuration"
@@ -51,6 +85,174 @@ pam:
     - "grep -R \"pam_faillock\\|pam_pwquality\\|pam_pwhistory\" /etc/pam.d /etc/security || true"
     - "faillock --user root || true"
   rollback: "Restore previous PAM files from backup and test login in an active root session before closing it"
+time_sync:
+  title: "Configure time synchronization"
+  summary: "Use one time synchronization service and verify it is enabled, synchronized, and using the approved time source"
+  commands:
+    - "sudo apt update"
+    - "sudo apt install chrony"
+    - "sudo systemctl enable --now chrony"
+  verification:
+    - command: "systemctl is-enabled chrony"
+      expected_result: "chrony is enabled"
+      requires_root: false
+      safe_to_run: true
+      manual: false
+      notes: ""
+    - command: "systemctl is-active chrony"
+      expected_result: "chrony is active"
+      requires_root: false
+      safe_to_run: true
+      manual: false
+      notes: ""
+    - command: "chronyc tracking"
+      expected_result: "System clock is synchronized"
+      requires_root: false
+      safe_to_run: true
+      manual: false
+      notes: ""
+    - command: "chronyc sources -v"
+      expected_result: "Configured sources match environment policy"
+      requires_root: false
+      safe_to_run: true
+      manual: true
+      notes: "Time source allow-list is environment-specific"
+  rollback: "Restore previous time synchronization service and configuration"
+cron_at:
+  title: "Harden cron and at access"
+  summary: "Restrict cron and at usage to authorized administrators and verify allow/deny file permissions"
+  verification:
+    - command: "stat -c '%a %U %G %n' /etc/cron.allow /etc/at.allow 2>/dev/null || true"
+      expected_result: "Allow files exist when required and are owned by root with restrictive permissions"
+      requires_root: false
+      safe_to_run: true
+      manual: false
+      notes: ""
+    - command: "stat -c '%a %U %G %n' /etc/cron.deny /etc/at.deny 2>/dev/null || true"
+      expected_result: "Deny files are absent or restricted according to policy"
+      requires_root: false
+      safe_to_run: true
+      manual: false
+      notes: ""
+  rollback: "Restore previous cron/at allow and deny files"
+firewall:
+  title: "Choose and configure a single firewall backend"
+  summary: "Select one supported firewall backend for the host profile and apply only that backend's rules"
+  backends:
+    ufw:
+      title: "Configure UFW firewall backend"
+      summary: "Use UFW as the single host firewall backend and keep iptables/nftables checks out of the remediation path"
+      commands:
+        - "sudo ufw default deny incoming"
+        - "sudo ufw default allow outgoing"
+        - "sudo ufw allow in on lo"
+        - "sudo ufw deny in from 127.0.0.0/8"
+        - "sudo ufw --force enable"
+      verification:
+        - command: "ufw status verbose"
+          expected_result: "UFW is active with default deny incoming, default allow outgoing, and expected loopback rules"
+          requires_root: true
+          safe_to_run: true
+          manual: false
+          notes: ""
+        - command: "systemctl is-active ufw"
+          expected_result: "ufw service is active"
+          requires_root: false
+          safe_to_run: true
+          manual: false
+          notes: ""
+      rollback: "Restore previous UFW rules or disable UFW only after another approved backend is active"
+    nftables:
+      title: "Configure nftables firewall backend"
+      summary: "Use nftables as the single host firewall backend and keep UFW/iptables checks out of the remediation path"
+      commands:
+        - "sudo apt install nftables"
+        - "sudo systemctl enable --now nftables"
+      verification:
+        - command: "systemctl is-active nftables"
+          expected_result: "nftables service is active"
+          requires_root: false
+          safe_to_run: true
+          manual: false
+          notes: ""
+        - command: "nft list ruleset"
+          expected_result: "Ruleset implements the approved nftables host firewall policy"
+          requires_root: true
+          safe_to_run: true
+          manual: true
+          notes: "Rules are environment-specific"
+      rollback: "Restore previous nftables ruleset or disable nftables only after another approved backend is active"
+    iptables:
+      title: "Configure iptables firewall backend"
+      summary: "Use iptables/ip6tables as the single host firewall backend and keep UFW/nftables checks out of the remediation path"
+      commands:
+        - "sudo iptables -L"
+        - "sudo ip6tables -L"
+      verification:
+        - command: "iptables -L -n -v"
+          expected_result: "IPv4 rules implement the approved iptables host firewall policy"
+          requires_root: true
+          safe_to_run: true
+          manual: true
+          notes: "Rules are environment-specific"
+        - command: "ip6tables -L -n -v"
+          expected_result: "IPv6 rules implement the approved iptables host firewall policy"
+          requires_root: true
+          safe_to_run: true
+          manual: true
+          notes: "Rules are environment-specific"
+      rollback: "Restore previous iptables/ip6tables rules or flush only after another approved backend is active"
+  verification:
+    - command: "systemctl is-active nftables ufw 2>/dev/null || true"
+      expected_result: "Only the selected firewall backend is active"
+      requires_root: false
+      safe_to_run: true
+      manual: false
+      notes: ""
+    - command: "nft list ruleset || true"
+      expected_result: "Ruleset matches the selected backend policy"
+      requires_root: true
+      safe_to_run: true
+      manual: true
+      notes: "Interpret this against the selected firewall_backend profile option"
+    - command: "ufw status verbose || true"
+      expected_result: "UFW is active only when selected as the backend"
+      requires_root: true
+      safe_to_run: true
+      manual: true
+      notes: "Interpret this against the selected firewall_backend profile option"
+  rollback: "Restore previous firewall rules and management backend"
+login_banners:
+  title: "Configure login banners"
+  summary: "Apply approved local and remote login warning banners without exposing system details"
+  verification:
+    - command: "cat /etc/issue /etc/issue.net"
+      expected_result: "Banner text matches approved policy and contains no OS or kernel disclosure"
+      requires_root: false
+      safe_to_run: true
+      manual: true
+      notes: ""
+    - command: "grep -R '^Banner ' /etc/ssh/sshd_config /etc/ssh/sshd_config.d 2>/dev/null || true"
+      expected_result: "SSH banner points to the approved banner file when required"
+      requires_root: false
+      safe_to_run: true
+      manual: false
+      notes: ""
+  rollback: "Restore previous banner files and SSH banner configuration"
+insecure_services:
+  title: "Remove insecure clients and services"
+  summary: "Remove legacy clients and services that expand attack surface without business justification"
+  commands:
+    - "sudo apt purge telnet rsh-client nis talk 2>/dev/null || true"
+    - "sudo apt autoremove"
+  verification:
+    - command: "dpkg -l | grep -E '^(ii|hi)\\s+(telnet|rsh-client|nis|talk)\\b' || true"
+      expected_result: "No listed insecure clients or services are installed"
+      requires_root: false
+      safe_to_run: true
+      manual: false
+      notes: ""
+  rollback: "Reinstall a removed package only after documenting accepted business need"
 auditd:
   title: "Configure auditd and audit rules"
   summary: "Install auditd, load audit rules, and verify audit subsystem status"

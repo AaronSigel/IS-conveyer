@@ -11,5 +11,6 @@ class NormalizedReport(TypedDict, total=False):
     summary: dict[str, Any]
     remediation_plan: list[dict[str, Any]]
     findings: list[dict[str, Any]]
+    exceptions: list[dict[str, Any]]
     under_evaluation: list[dict[str, Any]]
     raw_refs: list[dict[str, Any]]

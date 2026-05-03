@@ -20,6 +20,7 @@
         <tr><th>Run ID</th><td>{{ report.run.run_id }}</td></tr>
         <tr><th>Status</th><td>{{ report.run.status }}</td></tr>
         <tr><th>Profile</th><td>{{ report.run.profile }}</td></tr>
+        <tr><th>Firewall backend</th><td>{{ report.policy_options.firewall_backend }}</td></tr>
         <tr><th>Started</th><td>{{ report.run.started_at }}</td></tr>
         <tr><th>Finished</th><td>{{ report.run.finished_at }}</td></tr>
       </tbody>
@@ -32,6 +33,7 @@
       <thead>
         <tr>
           <th>Agent</th>
+          <th>IP / status</th>
           <th>OS</th>
           <th>Kernel</th>
           <th>Wazuh</th>
@@ -45,7 +47,8 @@
         {% for asset in report.scope.assets %}
         <tr>
           <td><b>{{ asset["agent.name"] }}</b><br><span class="muted">{{ asset["agent.id"] }}</span></td>
-          <td>{{ asset["host.os.full"] }}<br><span class="muted">{{ asset["host.os.version"] }}</span></td>
+          <td>{{ asset["agent.ip"] }}<br><span class="muted">{{ asset["agent.status"] }}</span></td>
+          <td>{{ asset["host.os.full"] }}<br><span class="muted">{{ asset["host.os.version"] }} · {{ asset["host.architecture"] }}</span></td>
           <td>{{ asset["host.os.kernel"] }}</td>
           <td>{{ asset["agent.version"] }}</td>
           <td>{{ asset.findings_total }}</td>
@@ -54,7 +57,7 @@
           <td><span class="badge severity-{{ asset.max_severity }}">{{ asset.max_severity }}</span></td>
         </tr>
         {% else %}
-        <tr><td colspan="8">No assets found in normalized findings.</td></tr>
+        <tr><td colspan="9">No assets found in normalized findings.</td></tr>
         {% endfor %}
       </tbody>
     </table>
@@ -67,6 +70,7 @@
       <div class="metric"><span>Filtered findings</span><b>{{ report.summary.filtered_findings }}</b></div>
       <div class="metric"><span>Unique findings</span><b>{{ report.summary.unique_findings }}</b></div>
       <div class="metric"><span>Remediation groups</span><b>{{ report.summary.remediation_groups }}</b></div>
+      <div class="metric"><span>Exceptions</span><b>{{ report.summary.exceptions }}</b></div>
     </div>
     <div class="summary-grid">
       <table>
@@ -90,6 +94,14 @@
         <tbody>
           {% for subsystem, count in report.summary.by_subsystem.items() %}
           <tr><td>{{ subsystem }}</td><td>{{ count }}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      <table>
+        <thead><tr><th>Applicability</th><th>Count</th></tr></thead>
+        <tbody>
+          {% for status, count in report.summary.by_applicability.items() %}
+          <tr><td>{{ status }}</td><td>{{ count }}</td></tr>
           {% endfor %}
         </tbody>
       </table>
@@ -138,7 +150,15 @@
       <ul class="code-list">{% for command in group.commands %}<li><code>{{ command }}</code></li>{% endfor %}</ul>
       {% endif %}
       <h4>Verification</h4>
-      <ul class="code-list">{% for command in group.verification %}<li><code>{{ command }}</code></li>{% endfor %}</ul>
+      <ul class="code-list">
+        {% for step in group.verification %}
+        <li>
+          <code>{{ step.command }}</code>
+          <span class="muted">Expected: {{ step.expected_result }}{% if step.requires_root %} · root{% endif %}{% if step.manual %} · manual review{% endif %}</span>
+          {% if step.notes %}<span class="muted">{{ step.notes }}</span>{% endif %}
+        </li>
+        {% endfor %}
+      </ul>
       <p class="muted"><b>Rollback:</b> {{ group.rollback }}</p>
     </article>
     {% else %}
@@ -156,7 +176,15 @@
       <h4>Commands</h4>
       <ul class="code-list">{% for command in group.commands %}<li><code>{{ command }}</code></li>{% endfor %}</ul>
       <h4>Verification</h4>
-      <ul class="code-list">{% for command in group.verification %}<li><code>{{ command }}</code></li>{% endfor %}</ul>
+      <ul class="code-list">
+        {% for step in group.verification %}
+        <li>
+          <code>{{ step.command }}</code>
+          <span class="muted">Expected: {{ step.expected_result }}{% if step.requires_root %} · root{% endif %}{% if step.manual %} · manual review{% endif %}</span>
+          {% if step.notes %}<span class="muted">{{ step.notes }}</span>{% endif %}
+        </li>
+        {% endfor %}
+      </ul>
       <p class="muted"><b>Rollback:</b> {{ group.rollback }}</p>
     </article>
     {% else %}
@@ -174,7 +202,7 @@
           <td>{{ group.priority }}</td>
           <td>{{ group.title }}</td>
           <td>{{ ", ".join(group.affected_assets) }}</td>
-          <td>{% for command in group.verification %}<code>{{ command }}</code>{% if not loop.last %}<br>{% endif %}{% endfor %}</td>
+          <td>{% for step in group.verification %}<code>{{ step.command }}</code><br><span class="muted">{{ step.expected_result }}{% if step.requires_root %} · root{% endif %}{% if step.manual %} · manual{% endif %}</span>{% if not loop.last %}<br>{% endif %}{% endfor %}</td>
         </tr>
         {% else %}
         <tr><td colspan="4">No verification commands for the selected findings.</td></tr>
@@ -185,13 +213,20 @@
 
   <section>
     <h2>8. Exceptions and under evaluation</h2>
+    {% for finding in report.exceptions %}
+    <article class="card compact">
+      <h3>{{ finding.finding_uid }} / {{ finding.title }}</h3>
+      <p class="meta">{{ ", ".join(finding.affected_assets) }} / {{ finding.severity.level }} / {{ finding.applicability.status }}</p>
+      <p>{{ finding.applicability.reason }}</p>
+    </article>
+    {% endfor %}
     {% for finding in report.under_evaluation %}
     <article class="card compact">
       <h3>{{ finding.finding_uid }} · {{ finding.title }}</h3>
       <p class="meta">{{ ", ".join(finding.affected_assets) }} · {{ finding.severity.level }}</p>
     </article>
     {% else %}
-    <p>No findings marked as under evaluation.</p>
+      {% if not report.exceptions %}<p>No findings marked as exception or under evaluation.</p>{% endif %}
     {% endfor %}
   </section>
 

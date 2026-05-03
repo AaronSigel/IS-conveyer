@@ -5,6 +5,9 @@ metadata:
   policy_file: cis_ubuntu24-04.yml
   source: Wazuh built-in SCA policy
 
+policy_options:
+  firewall_backend: ufw
+
 vulnerabilities:
   - id: VULN_OPENSSH_CVE_2024_6387
     cve: CVE-2024-6387

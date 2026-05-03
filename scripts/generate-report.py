@@ -1030,6 +1030,7 @@ def render_technical_split_reports(args, findings, selected_findings, metadata, 
                 findings,
                 filtered_findings=split_findings,
                 metadata=metadata_for_host(metadata, host),
+                policy_options=metadata.get("policy_options"),
                 profile=profile_name,
                 report_id=f"{host}-{kind}",
                 generated_at=report_datetime,
@@ -1078,10 +1079,13 @@ def main():
 
     selected_findings = apply_filters(findings, filters)
     profile_name = pathlib.Path(args.profile).stem if args.profile else "unknown"
+    policy_options = profile.get("policy_options") if isinstance(profile.get("policy_options"), dict) else {}
+    metadata.setdefault("policy_options", policy_options)
     report = build_normalized_report(
         findings,
         filtered_findings=selected_findings,
         metadata=metadata,
+        policy_options=policy_options,
         profile=profile_name,
         generated_at=report_datetime,
     )

@@ -98,14 +98,15 @@ th {
   width: 24%;
 }
 
-.asset-table th:nth-child(1) { width: 15%; }
-.asset-table th:nth-child(2) { width: 25%; }
-.asset-table th:nth-child(3) { width: 16%; }
-.asset-table th:nth-child(4) { width: 10%; }
-.asset-table th:nth-child(5),
+.asset-table th:nth-child(1) { width: 13%; }
+.asset-table th:nth-child(2) { width: 12%; }
+.asset-table th:nth-child(3) { width: 23%; }
+.asset-table th:nth-child(4) { width: 15%; }
+.asset-table th:nth-child(5) { width: 9%; }
 .asset-table th:nth-child(6),
-.asset-table th:nth-child(7) { width: 7%; }
-.asset-table th:nth-child(8) { width: 13%; }
+.asset-table th:nth-child(7),
+.asset-table th:nth-child(8) { width: 6%; }
+.asset-table th:nth-child(9) { width: 10%; }
 
 .plan-table th:nth-child(1) { width: 9%; }
 .plan-table th:nth-child(2) { width: 24%; }
@@ -117,7 +118,7 @@ th {
 .metrics {
   display: grid;
   gap: 10px;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   margin: 12px 0 16px;
 }
 
@@ -143,7 +144,7 @@ th {
 .summary-grid {
   display: grid;
   gap: 12px;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
 .card {
@@ -201,6 +202,12 @@ code {
 
 .code-list li {
   margin: 3px 0;
+}
+
+.code-list .muted {
+  display: block;
+  font-size: 10.5px;
+  margin-top: 2px;
 }
 
 .appendix-note {
