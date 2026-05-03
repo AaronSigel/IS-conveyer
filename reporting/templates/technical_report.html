@@ -9,7 +9,7 @@
 <main>
   <header class="report-header">
     <p class="eyebrow">Passport-oriented Wazuh security assessment</p>
-    <h1>Technical report</h1>
+    <h1>Технический отчёт</h1>
     <p class="muted">{{ report.report_id }} · {{ report.generated_at }}</p>
   </header>
 
@@ -20,7 +20,8 @@
         <tr><th>Run ID</th><td>{{ report.run.run_id }}</td></tr>
         <tr><th>Status</th><td>{{ report.run.status }}</td></tr>
         <tr><th>Profile</th><td>{{ report.run.profile }}</td></tr>
-        <tr><th>Firewall backend</th><td>{{ report.policy_options.firewall_backend }}</td></tr>
+        <tr><th>Mode</th><td>{{ report.mode|default("summary") }}</td></tr>
+        <tr><th>Firewall backend</th><td>{{ report.policy_options.firewall_backend|default("не задан") }}</td></tr>
         <tr><th>Started</th><td>{{ report.run.started_at }}</td></tr>
         <tr><th>Finished</th><td>{{ report.run.finished_at }}</td></tr>
       </tbody>
@@ -28,7 +29,7 @@
   </section>
 
   <section>
-    <h2>2. Область проверки и описание объекта проверки</h2>
+    <h2>2. Объект и область проверки</h2>
     <table class="asset-table">
       <thead>
         <tr>
@@ -46,81 +47,68 @@
       <tbody>
         {% for asset in report.scope.assets %}
         <tr>
-          <td><b>{{ asset["agent.name"] }}</b><br><span class="muted">{{ asset["agent.id"] }}</span></td>
-          <td>{{ asset["agent.ip"] }}<br><span class="muted">{{ asset["agent.status"] }}</span></td>
-          <td>{{ asset["host.os.full"] }}<br><span class="muted">{{ asset["host.os.version"] }} · {{ asset["host.architecture"] }}</span></td>
-          <td>{{ asset["host.os.kernel"] }}</td>
-          <td>{{ asset["agent.version"] }}</td>
+          <td><b>{{ asset.agent_name|default(asset["agent.name"]) }}</b><br><span class="muted">{{ asset.agent_id|default(asset["agent.id"]) }}</span></td>
+          <td>{{ asset.ip|default(asset["agent.ip"]) }}<br><span class="muted">{{ asset.status|default(asset["agent.status"]) }}</span></td>
+          <td>{{ asset.os_name|default(asset["host.os.full"]) }}<br><span class="muted">{{ asset.os_version|default(asset["host.os.version"]) }} · {{ asset.architecture|default(asset["host.architecture"]) }}</span></td>
+          <td>{{ asset.kernel|default(asset["host.os.kernel"]) }}</td>
+          <td>{{ asset.wazuh_version|default(asset["agent.version"]) }}</td>
           <td>{{ asset.findings_total }}</td>
           <td>{{ asset.software_vulnerabilities }}</td>
           <td>{{ asset.configuration_noncompliance }}</td>
           <td><span class="badge severity-{{ asset.max_severity }}">{{ asset.max_severity }}</span></td>
         </tr>
         {% else %}
-        <tr><td colspan="9">No assets found in normalized findings.</td></tr>
+        <tr><td colspan="9">Активы не найдены в нормализованных данных отчёта.</td></tr>
         {% endfor %}
       </tbody>
     </table>
   </section>
 
   <section>
-    <h2>3. Методика, источники данных и обобщённые результаты</h2>
-    <p class="muted">Отчёт использует паспортно-ориентированную структуру представления сведений об уязвимостях и несоответствиях. Источники данных: Wazuh SCA, Wazuh Vulnerability Detection, Wazuh agent inventory and syscollector snapshots.</p>
+    <h2>3. Методика и источники данных</h2>
+    <p>Wazuh используется как источник данных о SCA/CIS-проверках, установленных пакетах, CVE и inventory. Код reporting выполняет нормализацию, классификацию, группировку, построение паспортов и приоритетного плана устранения.</p>
+    <p class="muted">Raw-данные Wazuh не встраиваются в тело PDF и сохраняются отдельными машинно-читаемыми артефактами.</p>
+  </section>
+
+  <section>
+    <h2>4. Сводка результатов проверки</h2>
     <div class="metrics">
       <div class="metric"><span>Raw findings</span><b>{{ report.summary.raw_findings }}</b></div>
-      <div class="metric"><span>Filtered findings</span><b>{{ report.summary.filtered_findings }}</b></div>
       <div class="metric"><span>Unique findings</span><b>{{ report.summary.unique_findings }}</b></div>
+      <div class="metric"><span>Passports</span><b>{{ report.passport_registry_meta.total }}</b></div>
       <div class="metric"><span>Remediation groups</span><b>{{ report.summary.remediation_groups }}</b></div>
       <div class="metric"><span>Exceptions</span><b>{{ report.summary.exceptions }}</b></div>
     </div>
     <div class="summary-grid">
       <table>
         <thead><tr><th>Severity</th><th>Count</th></tr></thead>
-        <tbody>
-          {% for severity, count in report.summary.by_severity.items() %}
-          <tr><td>{{ severity }}</td><td>{{ count }}</td></tr>
-          {% endfor %}
-        </tbody>
+        <tbody>{% for severity, count in report.summary.by_severity.items() %}<tr><td>{{ severity }}</td><td>{{ count }}</td></tr>{% endfor %}</tbody>
       </table>
       <table>
         <thead><tr><th>Type</th><th>Count</th></tr></thead>
-        <tbody>
-          {% for type, count in report.summary.by_type.items() %}
-          <tr><td>{{ type }}</td><td>{{ count }}</td></tr>
-          {% endfor %}
-        </tbody>
+        <tbody>{% for type, count in report.summary.by_type.items() %}<tr><td>{{ type }}</td><td>{{ count }}</td></tr>{% endfor %}</tbody>
       </table>
       <table>
         <thead><tr><th>Subsystem</th><th>Count</th></tr></thead>
-        <tbody>
-          {% for subsystem, count in report.summary.by_subsystem.items() %}
-          <tr><td>{{ subsystem }}</td><td>{{ count }}</td></tr>
-          {% endfor %}
-        </tbody>
+        <tbody>{% for subsystem, count in report.summary.by_subsystem.items() %}<tr><td>{{ subsystem }}</td><td>{{ count }}</td></tr>{% endfor %}</tbody>
       </table>
       <table>
         <thead><tr><th>Applicability</th><th>Count</th></tr></thead>
-        <tbody>
-          {% for status, count in report.summary.by_applicability.items() %}
-          <tr><td>{{ status }}</td><td>{{ count }}</td></tr>
-          {% endfor %}
-        </tbody>
+        <tbody>{% for status, count in report.summary.by_applicability.items() %}<tr><td>{{ status }}</td><td>{{ count }}</td></tr>{% endfor %}</tbody>
       </table>
     </div>
   </section>
 
   <section>
-    <h2>4. План устранения</h2>
+    <h2>5. Матрица соответствия структуре паспорта уязвимости</h2>
+    {% include "passport_matrix.html" %}
+  </section>
+
+  <section>
+    <h2>6. Приоритетный план устранения</h2>
     <table class="plan-table">
       <thead>
-        <tr>
-          <th>Priority</th>
-          <th>Group</th>
-          <th>Severity</th>
-          <th>Assets</th>
-          <th>Findings</th>
-          <th>Summary</th>
-        </tr>
+        <tr><th>Priority</th><th>Group</th><th>Severity</th><th>Assets</th><th>Findings</th><th>Summary</th></tr>
       </thead>
       <tbody>
         {% for group in report.remediation_plan %}
@@ -133,155 +121,70 @@
           <td>{{ group.summary }}</td>
         </tr>
         {% else %}
-        <tr><td colspan="6">No remediation actions for the selected findings.</td></tr>
+        <tr><td colspan="6">Для выбранных данных нет действий в плане устранения.</td></tr>
         {% endfor %}
       </tbody>
     </table>
   </section>
 
   <section>
-    <h2>5. Группы несоответствий конфигурации</h2>
-    {% for group in report.remediation_groups if group.action_type == "config_change" %}
-    <article class="card">
-      <h3>{{ group.title }}</h3>
-      <p class="meta">{{ group.priority }} · {{ group.severity_max }} · {{ ", ".join(group.affected_assets) }} · {{ group.affected_findings|length }} findings</p>
-      <p>{{ group.summary }}</p>
-      {% if group.commands %}
-      <h4>Commands</h4>
-      <ul class="code-list">{% for command in group.commands %}<li><code>{{ command }}</code></li>{% endfor %}</ul>
-      {% endif %}
-      <h4>Verification</h4>
-      <ul class="code-list">
-        {% for step in group.verification %}
-        <li>
-          <code>{{ step.command }}</code>
-          <span class="muted">Expected: {{ step.expected_result }}{% if step.requires_root %} · root{% endif %}{% if step.manual %} · manual review{% endif %}</span>
-          {% if step.notes %}<span class="muted">{{ step.notes }}</span>{% endif %}
-        </li>
-        {% endfor %}
-      </ul>
-      <p class="muted"><b>Rollback:</b> {{ group.rollback }}</p>
-    </article>
+    <h2>7. Паспорта ключевых уязвимостей установленного ПО</h2>
+    {% set software_passports = report.summary_passports|selectattr("passport_type", "equalto", "software")|list %}
+    {% if software_passports %}
+      {% for passport in software_passports %}
+        {% include "passport_card.html" %}
+      {% endfor %}
     {% else %}
-    <p>No configuration remediation groups.</p>
-    {% endfor %}
+      <p class="muted">Уязвимости установленного ПО не включены в область данного отчёта или не прошли порог summary-режима. Полный перечень доступен в <code>passport_registry.json</code> и <code>passport_registry.html</code>.</p>
+    {% endif %}
   </section>
 
   <section>
-    <h2>6. Группы уязвимостей установленного ПО</h2>
-    {% for group in report.remediation_groups if group.action_type == "package_update" %}
-    <article class="card">
-      <h3>{{ group.title }}</h3>
-      <p class="meta">{{ group.priority }} · score {{ group.priority_score }} · {{ group.severity_max }} · {{ group.asset }} · {{ group.cve_count }} CVE</p>
-      <p>{{ group.recommended_action or group.summary }}</p>
-      <table class="kv-table">
-        <tbody>
-          <tr><th>Package</th><td>{{ group.package.name }} {{ group.package.version }} ({{ group.package.architecture }})</td></tr>
-          <tr><th>Max CVSS</th><td>{{ group.max_cvss }}</td></tr>
-          <tr><th>CVE counts</th><td>critical {{ group.critical_count }}, high {{ group.high_count }}, medium {{ group.medium_count }}, low {{ group.low_count }}</td></tr>
-          <tr><th>Top CVE</th><td>{% for vuln in group.top_vulnerabilities %}{{ vuln.id }} ({{ vuln.severity }}{% if vuln.cvss is not none %}, {{ vuln.cvss }}{% endif %}){% if not loop.last %}<br>{% endif %}{% endfor %}</td></tr>
-        </tbody>
-      </table>
-      <h4>Commands</h4>
-      <ul class="code-list">{% for command in group.commands %}<li><code>{{ command }}</code></li>{% endfor %}</ul>
-      <h4>Verification</h4>
-      <ul class="code-list">
-        {% for step in group.verification %}
-        <li>
-          <code>{{ step.command }}</code>
-          <span class="muted">Expected: {{ step.expected_result }}{% if step.requires_root %} · root{% endif %}{% if step.manual %} · manual review{% endif %}</span>
-          {% if step.notes %}<span class="muted">{{ step.notes }}</span>{% endif %}
-        </li>
-        {% endfor %}
-      </ul>
-      <p class="muted"><b>Rollback:</b> {{ group.rollback }}</p>
-    </article>
+    <h2>8. Паспорта ключевых уязвимостей конфигурации</h2>
+    {% set configuration_passports = report.summary_passports|selectattr("passport_type", "equalto", "configuration")|list %}
+    {% if configuration_passports %}
+      {% for passport in configuration_passports %}
+        {% include "passport_card.html" %}
+      {% endfor %}
     {% else %}
-    <p>No software vulnerability groups.</p>
-    {% endfor %}
+      <p class="muted">Конфигурационные несоответствия не включены в область данного отчёта или не прошли порог summary-режима. Полный перечень доступен в <code>passport_registry.json</code> и <code>passport_registry.html</code>.</p>
+    {% endif %}
   </section>
 
   <section>
-    <h2>7. Порядок проверки устранения</h2>
+    <h2>9. Порядок проверки устранения</h2>
     <table class="plan-table">
       <thead><tr><th>Priority</th><th>Group</th><th>Assets</th><th>Verification</th></tr></thead>
       <tbody>
-        {% for group in report.remediation_plan %}
+        {% for group in report.remediation_plan[:10] %}
         <tr>
           <td>{{ group.priority }}</td>
           <td>{{ group.title }}</td>
           <td>{{ ", ".join(group.affected_assets) }}</td>
-          <td>{% for step in group.verification %}<code>{{ step.command }}</code><br><span class="muted">{{ step.expected_result }}{% if step.requires_root %} · root{% endif %}{% if step.manual %} · manual{% endif %}</span>{% if not loop.last %}<br>{% endif %}{% endfor %}</td>
+          <td>{% for step in group.verification[:3] %}<code>{{ step.command }}</code><br><span class="muted">{{ step.expected_result }}{% if step.requires_root %} · root{% endif %}{% if step.manual %} · manual{% endif %}</span>{% if not loop.last %}<br>{% endif %}{% endfor %}</td>
         </tr>
         {% else %}
-        <tr><td colspan="4">No verification commands for the selected findings.</td></tr>
+        <tr><td colspan="4">Нет команд проверки для выбранных данных.</td></tr>
         {% endfor %}
       </tbody>
     </table>
+    <p class="muted">Полный порядок проверки для всех паспортов доступен в паспортном реестре.</p>
   </section>
 
   <section>
-    <h2>8. Исключения и находящиеся на оценке записи</h2>
-    {% for finding in report.exceptions %}
-    <article class="card compact">
-      <h3>{{ finding.finding_uid }} / {{ finding.title }}</h3>
-      <p class="meta">{{ ", ".join(finding.affected_assets) }} / {{ finding.severity.level }} / {{ finding.applicability.status }}</p>
-      <p>{{ finding.applicability.reason }}</p>
-    </article>
-    {% endfor %}
-    {% for finding in report.under_evaluation %}
-    <article class="card compact">
-      <h3>{{ finding.finding_uid }} · {{ finding.title }}</h3>
-      <p class="meta">{{ ", ".join(finding.affected_assets) }} · {{ finding.severity.level }}</p>
-    </article>
-    {% else %}
-      {% if not report.exceptions %}<p>No findings marked as exception or under evaluation.</p>{% endif %}
-    {% endfor %}
-  </section>
-
-  <section>
-    <h2>9. Паспортные карточки findings{% if report.mode == "summary" %} (top subset){% endif %}</h2>
-    {% if report.mode == "summary" %}
-    <p class="muted">В summary-режиме выводится ограниченный набор detailed cards по настройкам max={{ report.render_options.max_detailed_findings }} и min priority={{ report.render_options.min_detailed_priority }}. Полный список доступен в normalized_report.json и full-режиме.</p>
-    {% endif %}
-    {% for finding in report.detailed_findings %}
-    <article class="card finding-card">
-      <h3>{{ finding.finding_uid }} · {{ finding.title }}</h3>
-      <table class="kv-table">
-        <tbody>
-          <tr><th>Type</th><td>{{ finding.type }}</td></tr>
-          <tr><th>Severity</th><td>{{ finding.severity.level }}{% if finding.severity.score is not none %} / {{ finding.severity.score }}{% endif %}</td></tr>
-          <tr><th>Affected assets</th><td>{{ ", ".join(finding.affected_assets) }}</td></tr>
-          {% if finding.type == "software_vulnerability" %}
-          <tr><th>CVE</th><td>{{ finding.cve }}</td></tr>
-          <tr><th>Package</th><td>{{ finding.package.name }}</td></tr>
-          <tr><th>Installed versions</th><td>{{ finding.package.installed_versions }}</td></tr>
-          <tr><th>Fixed condition</th><td>{{ finding.package.fixed_condition }}</td></tr>
-          {% else %}
-          <tr><th>Requirement</th><td>{{ finding.requirement.id }} · {{ finding.requirement.title }}</td></tr>
-          <tr><th>Subsystem</th><td>{{ finding.subsystem }}</td></tr>
-          <tr><th>Check command</th><td><code>{{ finding.check.command }}</code></td></tr>
-          <tr><th>Expected</th><td>{{ finding.check.expected }}</td></tr>
-          <tr><th>Actual</th><td>{{ finding.check.actual }}</td></tr>
-          {% endif %}
-          <tr><th>Impact</th><td>{{ finding.impact or finding.description }}</td></tr>
-          <tr><th>Remediation</th><td>{{ finding.remediation.summary }}</td></tr>
-          <tr><th>Evidence</th><td>{% for item in finding.evidence %}{{ item }}{% if not loop.last %}<br>{% endif %}{% endfor %}</td></tr>
-        </tbody>
-      </table>
-    </article>
-    {% else %}
-    <p>No main findings for the selected filters.</p>
-    {% endfor %}
+    <h2>10. Исключения и ограничения применимости</h2>
+    {% include "exceptions_summary.html" %}
   </section>
 
   <section class="appendix-note">
-    <h2>10. Сведения о raw-артефактах</h2>
-    <p>Machine-readable report data and raw Wazuh API/indexer snapshots are stored as separate artifacts next to this report. They are intentionally not embedded into the PDF body.</p>
+    <h2>11. Сведения о машинно-читаемых приложениях</h2>
+    <p>Полная детализация вынесена в отдельные артефакты рядом с отчётом.</p>
     <ul>
+      <li><code>normalized_report.json</code></li>
+      <li><code>passport_registry.json</code></li>
+      <li><code>passport_registry.html</code></li>
       <li><code>raw/wazuh-sca.json</code></li>
       <li><code>raw/wazuh-vulnerabilities.json</code></li>
-      <li><code>normalized_report.json</code></li>
     </ul>
   </section>
 </main>

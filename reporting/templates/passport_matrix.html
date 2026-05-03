@@ -1,0 +1,20 @@
+<table class="plan-table">
+  <thead>
+    <tr>
+      <th>Поле паспорта</th>
+      <th>Заполняется автоматически</th>
+      <th>Источник данных</th>
+      <th>Комментарий</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for row in report.passport_matrix %}
+    <tr>
+      <td>{{ row.field }}</td>
+      <td>{{ row.automatic }}</td>
+      <td>{{ row.source }}</td>
+      <td>{{ row.comment }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>

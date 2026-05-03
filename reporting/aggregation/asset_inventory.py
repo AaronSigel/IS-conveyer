@@ -9,6 +9,15 @@ from reporting.common import as_text, severity_rank
 
 def _default_record(asset: str) -> dict[str, Any]:
     return {
+        "agent_id": "unknown",
+        "agent_name": asset,
+        "ip": "unknown",
+        "status": "unknown",
+        "os_name": "unknown",
+        "os_version": "unknown",
+        "architecture": "unknown",
+        "kernel": "unknown",
+        "wazuh_version": "unknown",
         "agent.id": "unknown",
         "agent.name": asset,
         "agent.version": "unknown",
@@ -36,6 +45,27 @@ def _merge_known(record: dict[str, Any], details: dict[str, Any], keys: tuple[st
         text = as_text(value, default="unknown")
         if record.get(key) == "unknown" and text != "unknown":
             record[key] = text
+
+
+def _sync_aliases(record: dict[str, Any]) -> None:
+    aliases = {
+        "agent_id": "agent.id",
+        "agent_name": "agent.name",
+        "ip": "agent.ip",
+        "status": "agent.status",
+        "os_name": "host.os.full",
+        "os_version": "host.os.version",
+        "architecture": "host.architecture",
+        "kernel": "host.os.kernel",
+        "wazuh_version": "agent.version",
+    }
+    for plain, dotted in aliases.items():
+        plain_value = record.get(plain)
+        dotted_value = record.get(dotted)
+        if plain_value in (None, "", "unknown", []) and dotted_value not in (None, "", "unknown", []):
+            record[plain] = dotted_value
+        elif dotted_value in (None, "", "unknown", []) and plain_value not in (None, "", "unknown", []):
+            record[dotted] = plain_value
 
 
 def build_asset_inventory(findings: list[dict[str, Any]], asset_enrichment: Any | None = None) -> list[dict[str, Any]]:
@@ -72,4 +102,6 @@ def build_asset_inventory(findings: list[dict[str, Any]], asset_enrichment: Any 
             if severity_rank(level) > severity_rank(record["max_severity"]):
                 record["max_severity"] = level
             counters.setdefault(asset, Counter()).update([finding.get("type", "unknown")])
+    for record in assets.values():
+        _sync_aliases(record)
     return sorted(assets.values(), key=lambda item: item["agent.name"])

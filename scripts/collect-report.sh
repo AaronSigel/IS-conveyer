@@ -57,6 +57,8 @@ if [[ -n "${OUTPUT_DIR}" ]]; then
   NORMALIZED_REPORT_PATH="${OUTPUT_DIR}/normalized_report.json"
   TECHNICAL_HTML_PATH="${OUTPUT_DIR}/technical_report.html"
   TECHNICAL_PDF_PATH="${OUTPUT_DIR}/technical_report.pdf"
+  PASSPORT_REGISTRY_JSON_PATH="${OUTPUT_DIR}/passport_registry.json"
+  PASSPORT_REGISTRY_HTML_PATH="${OUTPUT_DIR}/passport_registry.html"
   SPLIT_REPORTS_DIR="${OUTPUT_DIR}/reports"
   METADATA_PATH="${OUTPUT_DIR}/metadata.json"
 elif [[ -n "${OUTPUT_PREFIX}" ]]; then
@@ -76,6 +78,8 @@ elif [[ -n "${OUTPUT_PREFIX}" ]]; then
   NORMALIZED_REPORT_PATH="${OUTPUT_DIR}/normalized_report.json"
   TECHNICAL_HTML_PATH="${OUTPUT_DIR}/technical_report.html"
   TECHNICAL_PDF_PATH="${OUTPUT_DIR}/technical_report.pdf"
+  PASSPORT_REGISTRY_JSON_PATH="${OUTPUT_DIR}/passport_registry.json"
+  PASSPORT_REGISTRY_HTML_PATH="${OUTPUT_DIR}/passport_registry.html"
   SPLIT_REPORTS_DIR="${OUTPUT_DIR}/reports"
   METADATA_PATH="${OUTPUT_DIR}/metadata.json"
   LEGACY_PREFIX_PATHS=1
@@ -87,6 +91,8 @@ else
   NORMALIZED_REPORT_PATH="${ARTIFACTS_DIR}/normalized_report.json"
   TECHNICAL_HTML_PATH="${ARTIFACTS_DIR}/technical_report.html"
   TECHNICAL_PDF_PATH="${ARTIFACTS_DIR}/technical_report.pdf"
+  PASSPORT_REGISTRY_JSON_PATH="${ARTIFACTS_DIR}/passport_registry.json"
+  PASSPORT_REGISTRY_HTML_PATH="${ARTIFACTS_DIR}/passport_registry.html"
   SPLIT_REPORTS_DIR=""
 fi
 
@@ -125,6 +131,8 @@ metadata.update(
             "normalized_report": "normalized_report.json",
             "html": "technical_report.html",
             "pdf": "technical_report.pdf",
+            "passport_registry_json": "passport_registry.json",
+            "passport_registry_html": "passport_registry.html",
             "raw_sca": "raw/wazuh-sca.json",
             "raw_vulnerabilities": "raw/wazuh-vulnerabilities.json",
             "legacy_markdown": "draft-report.md",
@@ -154,6 +162,8 @@ generate_args=(
   --normalized-output "${NORMALIZED_REPORT_PATH}"
   --html-output "${TECHNICAL_HTML_PATH}"
   --pdf-output "${TECHNICAL_PDF_PATH}"
+  --passport-registry-json "${PASSPORT_REGISTRY_JSON_PATH}"
+  --passport-registry-html "${PASSPORT_REGISTRY_HTML_PATH}"
 )
 if [[ -n "${SPLIT_REPORTS_DIR}" ]]; then
   generate_args+=(--split-output-dir "${SPLIT_REPORTS_DIR}")
@@ -183,6 +193,8 @@ if [[ "${LEGACY_PREFIX_PATHS}" -eq 1 ]]; then
   cp "${REPORT_PATH}" "${ARTIFACTS_DIR}/${NORMALIZED_PREFIX}-draft-report.md"
   cp "${NORMALIZED_REPORT_PATH}" "${ARTIFACTS_DIR}/${NORMALIZED_PREFIX}-normalized_report.json"
   cp "${TECHNICAL_HTML_PATH}" "${ARTIFACTS_DIR}/${NORMALIZED_PREFIX}-technical_report.html"
+  cp "${PASSPORT_REGISTRY_JSON_PATH}" "${ARTIFACTS_DIR}/${NORMALIZED_PREFIX}-passport_registry.json"
+  cp "${PASSPORT_REGISTRY_HTML_PATH}" "${ARTIFACTS_DIR}/${NORMALIZED_PREFIX}-passport_registry.html"
   if [[ -f "${TECHNICAL_PDF_PATH}" ]]; then
     cp "${TECHNICAL_PDF_PATH}" "${ARTIFACTS_DIR}/${NORMALIZED_PREFIX}-technical_report.pdf"
   fi
@@ -194,6 +206,8 @@ echo "raw vulnerabilities: ${RAW_VULNS_PATH}"
 echo "normalized report: ${NORMALIZED_REPORT_PATH}"
 echo "technical html: ${TECHNICAL_HTML_PATH}"
 echo "technical pdf: ${TECHNICAL_PDF_PATH}"
+echo "passport registry json: ${PASSPORT_REGISTRY_JSON_PATH}"
+echo "passport registry html: ${PASSPORT_REGISTRY_HTML_PATH}"
 echo "legacy report path: ${REPORT_PATH}"
 if [[ -n "${SPLIT_REPORTS_DIR}" ]]; then
   echo "split reports: ${SPLIT_REPORTS_DIR}"

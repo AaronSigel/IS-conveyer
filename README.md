@@ -172,6 +172,8 @@ artifacts/runs/<run_id>/
   normalized_report.json
   technical_report.html
   technical_report.pdf
+  passport_registry.json
+  passport_registry.html
   raw/
     wazuh-sca.json
     wazuh-vulnerabilities.json
@@ -397,3 +399,8 @@ python scripts/generate-report.py --input report/samples/wazuh-mvp --output repo
 ```
 
 Details: [docs/technical-mvp-report.md](docs/technical-mvp-report.md).
+## Passport-oriented reports
+
+The modern report model separates `RawFinding`, `RemediationGroup` and `VulnerabilityPassport`. Summary HTML/PDF prints only key passports and the remediation plan; the complete passport registry is exported as `passport_registry.json` and `passport_registry.html`.
+
+Software CVE passports are classified as `уязвимость кода`. SCA/CIS configuration passports are classified as `уязвимость конфигурации`. Use `--passport-scope top|all`, `--max-summary-passports`, `--min-passport-priority`, `--include-low`, `--include-info` and `--export-passport-registry` to control output detail.

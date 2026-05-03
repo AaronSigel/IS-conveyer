@@ -72,6 +72,10 @@ def test_configuration_asset_metadata():
     assert asset["host.os.full"] == "Ubuntu 24.04.4 LTS (Noble Numbat)"
     assert asset["host.os.version"] == "24.04.4"
     assert asset["host.os.kernel"] == "6.8.0-106-generic"
+    assert asset["agent_id"] == "001"
+    assert asset["agent_name"] == "target1"
+    assert asset["kernel"] == "6.8.0-106-generic"
+    assert asset["wazuh_version"] == "v4.14.5"
 
 
 def test_asset_enrichment_prefers_wazuh_inventory():
@@ -124,6 +128,10 @@ def test_asset_enrichment_prefers_wazuh_inventory():
     assert asset["host.os.full"] == "Ubuntu 24.04.4 LTS (Noble Numbat)"
     assert asset["host.os.kernel"] == "6.8.0-106-generic"
     assert asset["host.architecture"] == "x86_64"
+    assert asset["ip"] == "192.168.56.11"
+    assert asset["status"] == "active"
+    assert asset["os_name"] == "Ubuntu 24.04.4 LTS (Noble Numbat)"
+    assert asset["architecture"] == "x86_64"
 
 
 def test_package_deduplication_across_hosts():
@@ -161,6 +169,29 @@ def test_priority_and_remediation_groups():
     assert any("sudo apt install --only-upgrade sudo" in group["commands"] for group in groups)
     assert any("modprobe -n -v cramfs" in verification_commands(group) for group in groups)
     assert all("priority_score" in group and "priority_reason" in group for group in groups)
+
+
+def test_vulnerability_passports_are_built():
+    report = build_normalized_report([package_raw(), configuration_raw()], filtered_findings=[package_raw(), configuration_raw()])
+    passports = report["vulnerability_passports"]
+    assert passports
+    assert any(passport["vulnerability_class"] == "уязвимость кода" for passport in passports)
+    assert any(passport["vulnerability_class"] == "уязвимость конфигурации" for passport in passports)
+    assert all("passport_completeness_score" in passport for passport in passports)
+    assert all(passport["completeness_score"] >= 0.9 for passport in report["summary_passports"])
+    assert report["passport_matrix"]
+    assert report["findings"][0]["passport_refs"]
+
+
+def test_summary_excludes_individual_info_package_passports():
+    raw = copy.deepcopy(package_raw())
+    raw["severity"] = "info"
+    raw["cvss"]["base_score"] = 0
+    raw["wazuh_vulnerability"]["vulnerability"]["severity"] = "Informational"
+    raw["wazuh_vulnerability"]["vulnerability"]["score"]["base"] = 0
+    report = build_normalized_report([raw], filtered_findings=[raw])
+    assert report["vulnerability_passports"]
+    assert report["summary_passports"] == []
 
 
 def test_remediation_knowledge_base_verification():
@@ -285,6 +316,15 @@ def test_firewall_backend_filters_conflicting_remediation_paths():
     assert not [group for group in disabled_report["remediation_groups"] if "firewall" in group["title"].lower()]
 
 
+def test_firewall_applicability_does_not_apply_to_package_cve():
+    raw = copy.deepcopy(package_raw())
+    raw["title"] = "Firewall related CVE in sudo"
+    raw["description"] = "This package text mentions firewall but is still a package vulnerability."
+    report = build_normalized_report([raw], filtered_findings=[raw], policy_options={"firewall_backend": "none"})
+    assert report["findings"]
+    assert report["exceptions"] == []
+
+
 def test_applicability_exceptions_are_outside_remediation_plan():
     boot_raw = copy.deepcopy(configuration_raw())
     boot_raw["title"] = "1.4.2 Ensure bootloader password is set"
@@ -323,6 +363,20 @@ def test_applicability_exceptions_are_outside_remediation_plan():
     assert override_report["exceptions"][0]["applicability"]["reason"] == "Accepted for isolated lab demonstration."
 
 
+def test_partition_exception_reasons_are_specific():
+    tmp_raw = copy.deepcopy(configuration_raw())
+    tmp_raw["title"] = "1.1.2.1 Ensure separate partition exists for /tmp"
+    tmp_raw["remediation"] = "Create a separate partition for /tmp."
+    tmp_raw["wazuh_sca"]["title"] = tmp_raw["title"]
+    tmp_raw["wazuh_sca"]["target"] = "findmnt -kn /tmp"
+
+    report = build_normalized_report([tmp_raw], filtered_findings=[tmp_raw])
+    assert report["exceptions"]
+    reason = report["exceptions"][0]["applicability"]["reason"]
+    assert "/var/log/audit" not in reason
+    assert "storage layout" in reason
+
+
 def test_under_evaluation_is_separate():
     raw = copy.deepcopy(package_raw())
     raw["severity"] = "info"
@@ -344,11 +398,15 @@ def main():
     test_package_deduplication_across_hosts()
     test_configuration_deduplication_across_hosts()
     test_priority_and_remediation_groups()
+    test_vulnerability_passports_are_built()
+    test_summary_excludes_individual_info_package_passports()
     test_remediation_knowledge_base_verification()
     test_related_package_grouping()
     test_engineering_remediation_grouping_and_structured_verification()
     test_firewall_backend_filters_conflicting_remediation_paths()
+    test_firewall_applicability_does_not_apply_to_package_cve()
     test_applicability_exceptions_are_outside_remediation_plan()
+    test_partition_exception_reasons_are_specific()
     test_under_evaluation_is_separate()
     print("reporting unit tests passed")
 

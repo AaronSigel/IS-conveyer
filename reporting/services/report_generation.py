@@ -8,6 +8,7 @@ from typing import Any
 from reporting import build_normalized_report
 from reporting.renderers import render_html as render_technical_html
 from reporting.renderers import render_json as render_technical_json
+from reporting.renderers import render_passport_registry_html
 from reporting.renderers import render_pdf as render_technical_pdf
 from reporting.services.report_export import build_normalized_report_for_export
 
@@ -52,6 +53,13 @@ def technical_output_paths(args: Any, default_output_dir: Path) -> tuple[Path, P
     )
 
 
+def passport_registry_output_paths(args: Any, default_output_dir: Path) -> tuple[Path, Path]:
+    output_dir = Path(args.output).parent if args.output else default_output_dir
+    json_path = Path(getattr(args, "passport_registry_json", "") or output_dir / "passport_registry.json")
+    html_path = Path(getattr(args, "passport_registry_html", "") or output_dir / "passport_registry.html")
+    return json_path, html_path
+
+
 def render_technical_outputs(report: dict[str, Any], json_path: Path, html_path: Path, pdf_path: Path, skip_pdf: bool = False) -> None:
     render_technical_json(report, json_path)
     render_technical_html(report, html_path)
@@ -60,6 +68,11 @@ def render_technical_outputs(report: dict[str, Any], json_path: Path, html_path:
             render_technical_pdf(html_path, pdf_path)
         except Exception as exc:
             print(f"PDF rendering skipped: {exc}", file=sys.stderr)
+
+
+def render_passport_registry_outputs(report: dict[str, Any], json_path: Path, html_path: Path) -> None:
+    render_technical_json(report.get("vulnerability_passports", []), json_path)
+    render_passport_registry_html(report, html_path)
 
 
 def render_technical_split_reports(
@@ -92,6 +105,18 @@ def render_technical_split_reports(
                 generated_at=report_datetime,
             )
             base = output_dir / f"{safe_filename_part(host)}-{kind}-report"
+            host_findings = [item for item in selected_findings if str(item.get("host")) == str(host)]
+            if host_findings:
+                host_report = build_normalized_report_for_export(
+                    findings,
+                    filtered_findings=host_findings,
+                    metadata=metadata_for_host(metadata, host),
+                    profile=profile_name,
+                    report_id=f"{host}-combined",
+                    generated_at=report_datetime,
+                )
+                split_report["assets"] = host_report.get("assets", [])
+                split_report["scope"] = {"assets": host_report.get("assets", [])}
             render_technical_outputs(split_report, base.with_suffix(".json"), base.with_suffix(".html"), base.with_suffix(".pdf"), args.skip_pdf)
             written.extend([base.with_suffix(".json"), base.with_suffix(".html")])
             if not args.skip_pdf and base.with_suffix(".pdf").exists():

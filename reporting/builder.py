@@ -7,6 +7,12 @@ from typing import Any
 from reporting.aggregation.applicability import apply_applicability, is_in_remediation_scope
 from reporting.aggregation.asset_inventory import build_asset_inventory
 from reporting.aggregation.deduplicate import deduplicate_findings
+from reporting.aggregation.passport_registry import (
+    build_exceptions_summary,
+    build_passport_matrix,
+    build_vulnerability_passports,
+    select_summary_passports,
+)
 from reporting.aggregation.remediation_groups import build_remediation_groups
 from reporting.aggregation.severity import calculate_priority, is_under_evaluation
 from reporting.common import severity_rank, stable_id
@@ -116,6 +122,13 @@ def build_normalized_report(
     remediation_groups = build_remediation_groups(main_findings, options)
     inventory_source = asset_enrichment or (metadata or {}).get("asset_enrichment")
     assets = build_asset_inventory(deduped, inventory_source)
+    passport_findings = active_findings + under_evaluation
+    if bool(options.get("include_passports", True)):
+        vulnerability_passports = build_vulnerability_passports(passport_findings, remediation_groups, assets, options)
+        summary_passports = select_summary_passports(vulnerability_passports, remediation_groups, options)
+    else:
+        vulnerability_passports = []
+        summary_passports = []
     generated = generated_at or datetime.now().astimezone()
     raw_refs = _compact_raw_refs(deduped)
 
@@ -127,10 +140,25 @@ def build_normalized_report(
         "scope": {"assets": assets},
         "assets": assets,
         "summary": _summary(len(raw_findings), len(selected_raw), deduped, remediation_groups, exceptions),
+        "passport_matrix": build_passport_matrix(),
+        "vulnerability_passports": vulnerability_passports,
+        "summary_passports": summary_passports,
+        "passport_registry_meta": {
+            "total": len(vulnerability_passports),
+            "summary_selected": len(summary_passports),
+            "summary_policy": {
+                "passport_scope": options.get("passport_scope", "top"),
+                "max_summary_passports": options.get("max_summary_passports", 25),
+                "min_passport_priority": options.get("min_passport_priority", "P2"),
+                "include_low": bool(options.get("include_low", False)),
+                "include_info": bool(options.get("include_info", False)),
+            },
+        },
         "remediation_plan": remediation_groups,
         "remediation_groups": remediation_groups,
         "findings": main_findings,
         "exceptions": exceptions,
+        "exceptions_summary": build_exceptions_summary(exceptions),
         "under_evaluation": under_evaluation,
         "raw_refs": raw_refs,
     }

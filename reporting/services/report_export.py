@@ -12,6 +12,7 @@ import yaml
 from reporting import build_normalized_report
 from reporting.renderers import render_html as render_technical_html
 from reporting.renderers import render_json as render_technical_json
+from reporting.renderers import render_passport_registry_html
 from reporting.renderers import render_pdf as render_technical_pdf
 
 PROJECT_ROOT = pathlib.Path(__file__).resolve().parents[2]
@@ -577,3 +578,19 @@ def render_export_files(
         render_technical_pdf(html_path, pdf_path)
         written.append(str(pdf_path))
     return written
+
+
+def render_passport_registry_files(
+    normalized_report: dict[str, Any],
+    json_path: Path,
+    html_path: Path,
+) -> list[str]:
+    registry_report = {
+        **normalized_report,
+        "findings": [],
+        "remediation_plan": [],
+        "remediation_groups": [],
+    }
+    render_technical_json(normalized_report.get("vulnerability_passports", []), json_path)
+    render_passport_registry_html(registry_report, html_path)
+    return [str(json_path), str(html_path)]

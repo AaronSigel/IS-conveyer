@@ -1,0 +1,26 @@
+{% if report.exceptions_summary %}
+<table class="plan-table">
+  <thead>
+    <tr>
+      <th>Reason</th>
+      <th>Count</th>
+      <th>Affected subsystem</th>
+      <th>Affected components</th>
+      <th>Comment</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for item in report.exceptions_summary %}
+    <tr>
+      <td>{{ item.reason }}</td>
+      <td>{{ item.count }}</td>
+      <td>{{ item.affected_subsystem }}</td>
+      <td>{{ ", ".join(item.affected_components) }}</td>
+      <td>{{ item.comment }} Полный список записей доступен в паспортном реестре.</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="muted">Исключения и ограничения применимости не зафиксированы.</p>
+{% endif %}

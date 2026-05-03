@@ -52,6 +52,14 @@ def _matches_any(patterns: Any, value: str) -> bool:
 
 
 def _rule_matches(rule: dict[str, Any], finding: dict[str, Any]) -> bool:
+    finding_types = rule.get("finding_types")
+    if isinstance(finding_types, list):
+        allowed = {str(item).lower() for item in finding_types}
+        if str(finding.get("type") or "").lower() not in allowed:
+            return False
+    elif finding.get("type") != "configuration_noncompliance":
+        return False
+
     text = _finding_text(finding)
     title = str(finding.get("title") or "").lower()
     requirement = str(finding.get("requirement", {}).get("id") or "").lower()
@@ -82,6 +90,8 @@ def _selected_firewall_backend(policy_options: dict[str, Any] | None) -> str:
 
 
 def _firewall_applicability(finding: dict[str, Any], policy_options: dict[str, Any] | None) -> dict[str, Any] | None:
+    if finding.get("type") != "configuration_noncompliance":
+        return None
     text = _finding_text(finding)
     if "firewall" not in text and "ufw" not in text and "nftables" not in text and "iptables" not in text and "ip6tables" not in text:
         return None

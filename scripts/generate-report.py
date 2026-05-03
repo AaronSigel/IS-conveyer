@@ -64,6 +64,7 @@ def parse_args():
     parser.add_argument("--format", choices=("md", "html"), help="MVP report format. Enables file/directory Wazuh JSON input mode.")
     parser.add_argument("--min-severity", default="medium", choices=("critical", "high", "medium", "low", "info"), help="Minimum severity for MVP report.")
     parser.add_argument("--include-low", action="store_true", help="Include low severity findings in MVP report.")
+    parser.add_argument("--include-info", action="store_true", help="Include info severity records as individual passport cards in summary mode.")
     parser.add_argument("--include-passed", action="store_true", help="Include passed checks in MVP main report.")
     parser.add_argument("--include-raw-appendix", action="store_true", help="Embed raw source JSON appendix in MVP report.")
     parser.add_argument("--max-records", type=int, default=200, help="Maximum rows included in MVP main technical sections.")
@@ -71,12 +72,20 @@ def parse_args():
     parser.add_argument("--system-name", default="Проверяемая информационная система", help="Checked system/device name for MVP report.")
     parser.add_argument("--tool-version", default="IS-conveyer technical MVP", help="Tool version label for MVP report.")
     parser.add_argument("--mode", choices=("summary", "full", "technical", "legacy"), default="summary", help="Report pipeline to use.")
+    parser.add_argument("--include-passports", action="store_true", default=True, help="Include vulnerability passports in normalized report.")
+    parser.add_argument("--passport-scope", choices=("top", "all"), default="top", help="Passport cards rendered in the main technical report.")
+    parser.add_argument("--max-summary-passports", type=int, default=25, help="Maximum passports rendered in summary HTML/PDF.")
+    parser.add_argument("--min-passport-priority", default="P2", choices=("P1", "P2", "P3", "P4"), help="Lowest passport priority rendered in summary mode.")
+    parser.add_argument("--output-format", choices=("html", "pdf", "json"), help="Limit primary technical output format; JSON is always written when --normalized-output is set.")
+    parser.add_argument("--export-passport-registry", action=argparse.BooleanOptionalAction, default=True, help="Export passport_registry.json and passport_registry.html.")
     parser.add_argument("--legacy", action="store_true", help="Backward compatible shortcut for --mode legacy.")
     parser.add_argument("--max-detailed-findings", type=int, default=25, help="Maximum detailed finding cards in summary mode.")
     parser.add_argument("--min-detailed-priority", default="P2", help="Lowest priority shown as detailed cards in summary mode.")
     parser.add_argument("--normalized-output", help="Path to normalized_report.json.")
     parser.add_argument("--html-output", help="Path to technical_report.html.")
     parser.add_argument("--pdf-output", help="Path to technical_report.pdf.")
+    parser.add_argument("--passport-registry-json", help="Path to passport_registry.json.")
+    parser.add_argument("--passport-registry-html", help="Path to passport_registry.html.")
     parser.add_argument("--skip-pdf", action="store_true", help="Skip PDF rendering for fast tests/debugging.")
     parser.add_argument("--split-output-dir", help="Directory for per-host configuration and package reports.")
     parser.add_argument("--profile", default=str(DEFAULT_PROFILE), help="Path to assessment profile YAML.")
@@ -931,6 +940,14 @@ def render_technical_outputs(report, json_path, html_path, pdf_path, skip_pdf=Fa
     report_generation.render_technical_outputs(report, json_path, html_path, pdf_path, skip_pdf)
 
 
+def passport_registry_output_paths(args):
+    return report_generation.passport_registry_output_paths(args, DEFAULT_OUTPUT.parent)
+
+
+def render_passport_registry_outputs(report, json_path, html_path):
+    report_generation.render_passport_registry_outputs(report, json_path, html_path)
+
+
 PRIORITY_ORDER = {"P1": 4, "P2": 3, "P3": 2, "P4": 1}
 
 
@@ -1003,7 +1020,18 @@ def main():
     selected_findings = apply_filters(findings, filters)
     profile_name = pathlib.Path(args.profile).stem if args.profile else "unknown"
     policy_options = profile.get("policy_options") if isinstance(profile.get("policy_options"), dict) else {}
-    metadata.setdefault("policy_options", policy_options)
+    policy_options = dict(policy_options)
+    policy_options.update(
+        {
+            "include_passports": args.include_passports,
+            "passport_scope": args.passport_scope if args.mode == "summary" else "all",
+            "max_summary_passports": args.max_summary_passports,
+            "min_passport_priority": args.min_passport_priority,
+            "include_low": args.include_low,
+            "include_info": args.include_info,
+        }
+    )
+    metadata["policy_options"] = policy_options
     report = build_normalized_report_for_export(
         findings,
         filtered_findings=selected_findings,
@@ -1018,9 +1046,28 @@ def main():
         "mode": args.mode,
         "max_detailed_findings": args.max_detailed_findings,
         "min_detailed_priority": args.min_detailed_priority,
+        "passport_scope": args.passport_scope if args.mode == "summary" else "all",
+        "max_summary_passports": args.max_summary_passports,
+        "min_passport_priority": args.min_passport_priority,
+        "include_low": args.include_low,
+        "include_info": args.include_info,
     }
     json_path, html_path, pdf_path = technical_output_paths(args)
-    render_technical_outputs(report, json_path, html_path, pdf_path, args.skip_pdf)
+    if args.output_format == "json":
+        from reporting.renderers import render_json as render_technical_json
+
+        render_technical_json(report, json_path)
+    elif args.output_format == "html":
+        from reporting.renderers import render_html as render_technical_html
+        from reporting.renderers import render_json as render_technical_json
+
+        render_technical_json(report, json_path)
+        render_technical_html(report, html_path)
+    else:
+        render_technical_outputs(report, json_path, html_path, pdf_path, args.skip_pdf)
+    registry_json_path, registry_html_path = passport_registry_output_paths(args)
+    if args.export_passport_registry:
+        render_passport_registry_outputs(report, registry_json_path, registry_html_path)
     split_reports = render_technical_split_reports(args, findings, selected_findings, metadata, profile_name, report_datetime)
     profile_index = service_build_profile_index(profile, enrichment)
     passports = service_build_passports(selected_findings, profile_index, metadata, report_datetime)
@@ -1033,6 +1080,9 @@ def main():
     elif not args.skip_pdf:
         print(f"Technical PDF report was not created; HTML/JSON artifacts are available")
     print(f"Legacy markdown report written to {args.output}")
+    if args.export_passport_registry:
+        print(f"Passport registry JSON written to {registry_json_path}")
+        print(f"Passport registry HTML written to {registry_html_path}")
     print(f"Selected findings: {len(selected_findings)} of {len(findings)}")
     if split_reports:
         print(f"Split reports written: {len(split_reports)}")

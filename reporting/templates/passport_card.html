@@ -1,0 +1,21 @@
+<article class="card passport-card">
+  <h3>{{ passport.title_ru }}</h3>
+  <p class="meta">{{ passport.priority }} · {{ passport.severity }} · {{ passport.vulnerability_class }} · completeness {{ passport.completeness_score }}</p>
+  <table class="kv-table">
+    <tbody>
+      <tr><th>Идентификатор паспорта</th><td>{{ passport.passport_id }}</td></tr>
+      <tr><th>Объект / актив</th><td>{{ passport.asset }}</td></tr>
+      <tr><th>Компонент</th><td>{{ passport.component }}</td></tr>
+      <tr><th>ПО и версия</th><td>{{ passport.software_name }} {{ passport.software_version }}</td></tr>
+      <tr><th>Место проявления</th><td>{{ passport.location }}</td></tr>
+      <tr><th>Способ обнаружения</th><td>{{ passport.detection_method }}</td></tr>
+      <tr><th>Фактическое состояние</th><td>{{ passport.actual_state }}</td></tr>
+      <tr><th>Ожидаемое состояние</th><td>{{ passport.expected_state }}</td></tr>
+      <tr><th>Описание</th><td>{{ passport.description }}</td></tr>
+      <tr><th>Возможные последствия</th><td>{{ passport.consequences }}</td></tr>
+      <tr><th>Меры устранения</th><td>{{ passport.remediation_summary }}</td></tr>
+      <tr><th>Проверка устранения</th><td>{% for step in passport.verification_steps[:3] %}<code>{{ step.command }}</code><br><span class="muted">{{ step.expected_result }}</span>{% if not loop.last %}<br>{% endif %}{% endfor %}</td></tr>
+      <tr><th>Статус полноты</th><td>{{ passport.completeness_status }} / {{ passport.completeness_score }}</td></tr>
+    </tbody>
+  </table>
+</article>

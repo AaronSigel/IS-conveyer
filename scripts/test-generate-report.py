@@ -40,6 +40,8 @@ def run_technical_report(tmpdir):
     normalized = tmpdir / "normalized_report.json"
     html = tmpdir / "technical_report.html"
     pdf = tmpdir / "technical_report.pdf"
+    registry_json = tmpdir / "passport_registry.json"
+    registry_html = tmpdir / "passport_registry.html"
     split_dir = tmpdir / "technical-split"
     command = [
         sys.executable,
@@ -58,6 +60,10 @@ def run_technical_report(tmpdir):
         str(html),
         "--pdf-output",
         str(pdf),
+        "--passport-registry-json",
+        str(registry_json),
+        "--passport-registry-html",
+        str(registry_html),
         "--split-output-dir",
         str(split_dir),
         "--skip-pdf",
@@ -65,11 +71,18 @@ def run_technical_report(tmpdir):
     subprocess.run(command, cwd=PROJECT_ROOT, check=True, capture_output=True, text=True)
     assert normalized.exists()
     assert html.exists()
+    assert registry_json.exists()
+    assert registry_html.exists()
     assert (split_dir / "target1-configuration-report.html").exists()
     assert (split_dir / "target1-packages-report.html").exists()
     assert (split_dir / "target2-configuration-report.html").exists()
     assert (split_dir / "target2-packages-report.html").exists()
-    return json.loads(normalized.read_text(encoding="utf-8")), html.read_text(encoding="utf-8")
+    return (
+        json.loads(normalized.read_text(encoding="utf-8")),
+        html.read_text(encoding="utf-8"),
+        json.loads(registry_json.read_text(encoding="utf-8")),
+        registry_html.read_text(encoding="utf-8"),
+    )
 
 
 def assert_sections(report):
@@ -205,14 +218,27 @@ def main():
         assert "<td>package.architecture</td><td>amd64</td>" in html_report
         assert "<td>vulnerability.scanner.source</td><td>Canonical Security Tracker</td>" in html_report
 
-        normalized, technical_html = run_technical_report(tmpdir)
+        normalized, technical_html, registry_json, registry_html = run_technical_report(tmpdir)
         assert normalized["summary"]["raw_findings"] == 4
         assert normalized["summary"]["unique_findings"] == 4
         assert normalized["scope"]["assets"]
         assert normalized["findings"]
         assert normalized["remediation_plan"]
-        assert "План устранения" in technical_html
+        assert normalized["vulnerability_passports"]
+        assert normalized["passport_matrix"]
+        assert any(passport["vulnerability_class"] == "уязвимость кода" for passport in normalized["vulnerability_passports"])
+        assert any(passport["vulnerability_class"] == "уязвимость конфигурации" for passport in normalized["vulnerability_passports"])
+        assert all(passport["passport_completeness_score"] >= 0.9 for passport in normalized["summary_passports"])
+        assert "Приоритетный план устранения" in technical_html
         assert "Порядок проверки устранения" in technical_html
+        assert "Матрица соответствия структуре паспорта уязвимости" in technical_html
+        assert "Паспорта ключевых уязвимостей установленного ПО" in technical_html
+        assert "Паспорта ключевых уязвимостей конфигурации" in technical_html
+        assert "PKG-CVE-" not in technical_html
+        assert "No main findings for the selected filters" not in technical_html
+        assert "Уязвимость CVE-2025-32463 в пакете sudo" in technical_html
+        assert registry_json == normalized["vulnerability_passports"]
+        assert "Реестр паспортов уязвимостей" in registry_html
         assert "Full normalized JSON" not in technical_html
         assert "Appendix A. Raw Wazuh fields" not in technical_html
         assert "{{ report|json }}" not in technical_html

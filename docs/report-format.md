@@ -90,3 +90,18 @@ Legacy markdown-режим формирует разделы 0-6 и паспор
 - `report/templates/*` — legacy markdown compatibility для режима `scripts/generate-report.py --mode legacy`.
 
 Новые изменения в шаблонах отчёта должны вноситься в `reporting/templates/*`. Добавлять третью параллельную ветку шаблонов нельзя.
+## Passport-oriented model
+
+Modern HTML/PDF reporting separates three entities:
+
+- `RawFinding`: source or normalized Wazuh-derived record used for traceability. Raw findings are stored in `findings`, `raw_refs`, `raw/wazuh-sca.json` and `raw/wazuh-vulnerabilities.json`, but are not printed as long card lists in the summary PDF.
+- `RemediationGroup`: operational group of actions, such as package update, SSH hardening, PAM policy, auditd configuration, firewall backend selection or AppArmor enablement.
+- `VulnerabilityPassport`: formal GOST-like description of a software vulnerability or configuration weakness. Passports are stored in `vulnerability_passports` and rendered through `summary_passports` in the main report.
+
+`normalized_report.json` now includes `vulnerability_passports`, `summary_passports`, `passport_matrix`, `exceptions_summary` and `passport_registry_meta`.
+
+Software CVE passports use `vulnerability_class = "уязвимость кода"`. Configuration/SCA passports use `vulnerability_class = "уязвимость конфигурации"`. Missing source fields are kept explicit as `не установлено по данным источника`, `не применимо` or `требует ручного уточнения`.
+
+The default `summary` report renders only key passports: P1/P2, Critical/High, and passports linked to the top remediation plan. Low and Info CVE records are counted in statistics and kept in `passport_registry.json/html`, but are not printed as individual summary cards unless explicitly requested.
+
+Relevant passport CLI options are `--include-passports`, `--passport-scope top|all`, `--max-summary-passports`, `--min-passport-priority`, `--include-low`, `--include-info`, `--output-format html|pdf|json` and `--export-passport-registry`.

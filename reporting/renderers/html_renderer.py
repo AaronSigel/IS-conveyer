@@ -14,6 +14,12 @@ def _json(value: Any) -> str:
     return json.dumps(value, ensure_ascii=False, indent=2)
 
 
+def _environment() -> Environment:
+    env = Environment(loader=FileSystemLoader(TEMPLATES_DIR), autoescape=select_autoescape(["html", "xml"]))
+    env.filters["json"] = _json
+    return env
+
+
 def render_html(report: dict[str, Any], output_path: str | pathlib.Path) -> None:
     """Render technical HTML report."""
     path = pathlib.Path(output_path)
@@ -23,7 +29,14 @@ def render_html(report: dict[str, Any], output_path: str | pathlib.Path) -> None
 
 def render_html_string(report: dict[str, Any]) -> str:
     """Render technical HTML report to a string."""
-    env = Environment(loader=FileSystemLoader(TEMPLATES_DIR), autoescape=select_autoescape(["html", "xml"]))
-    env.filters["json"] = _json
+    env = _environment()
     template = env.get_template("technical_report.html")
     return template.render(report=report)
+
+
+def render_passport_registry_html(report: dict[str, Any], output_path: str | pathlib.Path) -> None:
+    path = pathlib.Path(output_path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    env = _environment()
+    template = env.get_template("passport_registry.html")
+    path.write_text(template.render(report=report), encoding="utf-8")
