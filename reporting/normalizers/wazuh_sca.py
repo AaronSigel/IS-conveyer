@@ -7,8 +7,8 @@ SCA_POLICY_NAME = "CIS Ubuntu Linux 24.04 LTS Benchmark v1.0.0"
 
 
 def normalize_sca_result(value: Any) -> str | None:
-    mapping = {"passed": "pass", "failed": "fail"}
-    return mapping.get(value)
+    mapping = {"passed": "pass", "failed": "fail", "pass": "pass", "fail": "fail"}
+    return mapping.get(str(value or "").strip().lower())
 
 
 def normalize_severity(value: Any) -> str:
@@ -51,15 +51,28 @@ def first_syscollector_os(os_items: list[dict[str, Any]]) -> dict[str, Any]:
     if not os_items:
         return {}
     item = os_items[0]
-    return item if isinstance(item, dict) else {}
+    if not isinstance(item, dict):
+        return {}
+    os_data = item.get("os") if isinstance(item.get("os"), dict) else {}
+    return {
+        "full": " ".join(str(part) for part in (os_data.get("name"), os_data.get("version")) if part) or None,
+        "name": os_data.get("name"),
+        "version": os_data.get("version"),
+        "kernel": item.get("release") or os_data.get("kernel"),
+        "platform": os_data.get("platform"),
+        "architecture": item.get("architecture"),
+        "build": item.get("version"),
+        "hostname": item.get("hostname"),
+    }
 
 
 def syscollector_os_full(host_os: dict[str, Any]) -> str | None:
     full = host_os.get("full")
     if full:
         return full
-    name = host_os.get("os_name") or host_os.get("name")
-    version = host_os.get("os_version") or host_os.get("version")
+    os_data = host_os.get("os") if isinstance(host_os.get("os"), dict) else {}
+    name = host_os.get("os_name") or host_os.get("name") or os_data.get("name")
+    version = host_os.get("os_version") or host_os.get("version") or os_data.get("version")
     return " ".join(str(part) for part in (name, version) if part) or None
 
 
@@ -101,13 +114,22 @@ def normalize_sca_findings(host: str, sca_checks: list[dict[str, Any]], sca_rule
                 "impact": item.get("rationale"),
                 "detection_method": f"Wazuh SCA policy {SCA_POLICY_ID}",
                 "sca_check_id": check_id,
-                "agent": {"id": agent.get("id"), "name": agent.get("name") or host, "version": agent.get("version")},
+                "agent": {
+                    "id": agent.get("id"),
+                    "name": agent.get("name") or host,
+                    "version": agent.get("version"),
+                    "ip": agent.get("ip"),
+                    "status": agent.get("status"),
+                    "labels": agent.get("labels"),
+                },
                 "host_os": {
                     "full": syscollector_os_full(host_os),
                     "name": host_os.get("os_name") or host_os.get("name"),
                     "version": host_os.get("os_version") or host_os.get("version"),
                     "kernel": host_os.get("os_kernel") or host_os.get("kernel"),
                     "platform": host_os.get("os_platform") or host_os.get("platform"),
+                    "architecture": host_os.get("architecture"),
+                    "build": host_os.get("build"),
                 },
                 "wazuh_sca": {
                     "id": check_id,

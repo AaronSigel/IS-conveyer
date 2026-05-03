@@ -1,8 +1,10 @@
 # ib-host-audit-poc
 
-Локальный PoC-стенд для проверки хостов по профилю ИБ на базе `Vagrant`, `VirtualBox`, `Ansible` и `Wazuh`.
+Локальный PoC-стенд и отчётный конвейер для проверки хостов по профилю ИБ на базе `Vagrant`, `VirtualBox`, `Ansible` и `Wazuh`.
 
 ## Назначение
+
+Wazuh используется как источник данных о состоянии конфигурации и уязвимостях установленного ПО. Проект реализует слой автоматизированной нормализации, дедупликации, группировки, приоритизации и формирования технического отчёта по результатам проверки требований информационной безопасности.
 
 На текущем этапе проект подготавливает воспроизводимый инфраструктурный каркас, который:
 
@@ -11,7 +13,7 @@
 - разворачивает `Wazuh manager`, `Wazuh agents`, `Wazuh API`, `Wazuh indexer` и `Wazuh dashboard`;
 - включает встроенную Wazuh SCA policy `cis_ubuntu24-04`;
 - проверяет CIS Ubuntu Linux 24.04 LTS Benchmark v1.0.0;
-- позволяет автономно пройти путь от старта VM до готового markdown-отчёта.
+- позволяет автономно пройти путь от старта VM до `normalized_report.json`, HTML/PDF technical report и raw Wazuh snapshots.
 
 ## Зависимости
 
@@ -160,6 +162,22 @@ powershell -ExecutionPolicy Bypass -File .\scripts\windows\collect-report.ps1
 ./scripts/scan-and-report.sh
 ./scripts/scan-and-report.sh --hosts target1 --output-prefix target1-manual
 ```
+
+Основной результат современного pipeline сохраняется в run directory:
+
+```text
+artifacts/runs/<run_id>/
+  metadata.json
+  unified-findings.json
+  normalized_report.json
+  technical_report.html
+  technical_report.pdf
+  raw/
+    wazuh-sca.json
+    wazuh-vulnerabilities.json
+```
+
+`normalized_report.json` является главным контрактом отчёта. HTML и PDF являются представлениями этой модели; raw Wazuh snapshots сохраняются отдельно и не встраиваются в тело PDF. Для совместимости `--output-prefix` также оставляет prefixed копии старых artifacts в `artifacts/`.
 
 Windows:
 
@@ -365,3 +383,17 @@ powershell -ExecutionPolicy Bypass -File .\scripts\windows\destroy.ps1
 - На текущем PoC-стенде это предупреждение не блокирует `vagrant up`, provisioning и SSH-доступ.
 - При проблемах с shared folders следует обновить box или переинициализировать VM под версию `VirtualBox`, установленную на хосте.
 - Полный cold-start `e2e` может занимать заметное время, так как manager устанавливает `Wazuh server`, `indexer` и `dashboard` с нуля.
+
+## Technical MVP report generator
+
+A standalone GOST-like MVP report mode is available through `scripts/generate-report.py --format md|html`. It accepts a JSON file or a directory with Wazuh/unified JSON data, normalizes findings into one passport model, deduplicates package CVE records, excludes passed checks by default, and renders grouped Markdown/HTML reports.
+
+Examples:
+
+```bash
+python scripts/generate-report.py --input report/samples/wazuh-mvp --output report/sample-technical-report.md --format md
+python scripts/generate-report.py --input report/samples/wazuh-mvp --output report/sample-technical-report.html --format html --min-severity medium
+python scripts/generate-report.py --input report/samples/wazuh-mvp --output report/full-technical-report.html --format html --include-passed --include-raw-appendix --include-low
+```
+
+Details: [docs/technical-mvp-report.md](docs/technical-mvp-report.md).

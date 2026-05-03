@@ -8,8 +8,10 @@ class NormalizedReport(TypedDict, total=False):
     generated_at: str
     run: dict[str, Any]
     scope: dict[str, Any]
+    assets: list[dict[str, Any]]
     summary: dict[str, Any]
     remediation_plan: list[dict[str, Any]]
+    remediation_groups: list[dict[str, Any]]
     findings: list[dict[str, Any]]
     exceptions: list[dict[str, Any]]
     under_evaluation: list[dict[str, Any]]

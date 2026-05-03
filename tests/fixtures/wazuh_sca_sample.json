@@ -1,0 +1,38 @@
+{
+  "agent": {
+    "id": "001",
+    "name": "target1",
+    "ip": "192.168.56.11",
+    "status": "active",
+    "version": "Wazuh v4.14.5"
+  },
+  "syscollector_os": {
+    "os": {
+      "name": "Ubuntu",
+      "version": "24.04.4 LTS (Noble Numbat)",
+      "platform": "ubuntu"
+    },
+    "release": "6.8.0-106-generic",
+    "architecture": "x86_64"
+  },
+  "check": {
+    "id": 35500,
+    "title": "1.1.1.1 Ensure cramfs kernel module is not available (Automated)",
+    "result": "failed",
+    "command": "modprobe -n -v cramfs",
+    "rationale": "Disabling uncommon filesystems reduces the kernel attack surface.",
+    "remediation": "Disable the cramfs kernel module.",
+    "compliance": [
+      {
+        "key": "cis",
+        "value": "1.1.1.1"
+      }
+    ],
+    "rules": [
+      {
+        "type": "command",
+        "rule": "c:modprobe -n -v cramfs -> r:^install /bin/false"
+      }
+    ]
+  }
+}

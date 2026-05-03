@@ -6,7 +6,20 @@
     <h1>Отчёт {{ metadata.id }}</h1>
     <p>{{ metadata.started_at or "-" }} · {{ metadata.profile_id }} · {{ ", ".join(metadata.hosts or []) }}</p>
   </div>
-  <a class="button" href="/reports/{{ metadata.id }}/json">Скачать JSON</a>
+  <div class="actions">
+    <a class="button" href="/reports/{{ metadata.id }}/html">Открыть summary HTML</a>
+    <a class="button" href="/reports/{{ metadata.id }}/pdf">Скачать PDF</a>
+    <a class="button" href="/reports/{{ metadata.id }}/normalized">normalized_report.json</a>
+  </div>
+</section>
+<section class="panel">
+  <h2>Готовые артефакты запуска</h2>
+  <p class="empty">UI использует готовые файлы из каталога запуска и не пересчитывает модель отчёта.</p>
+  <p>
+    <a href="/reports/{{ metadata.id }}/json">unified-findings.json</a> ·
+    <a href="/reports/{{ metadata.id }}/raw/wazuh-sca">raw/wazuh-sca.json</a> ·
+    <a href="/reports/{{ metadata.id }}/raw/wazuh-vulnerabilities">raw/wazuh-vulnerabilities.json</a>
+  </p>
 </section>
 <section class="metrics">
   <div><b>Total</b><span>{{ preview_summary.total }}</span></div>
@@ -15,7 +28,7 @@
   <div><b>Critical</b><span>{{ preview_summary.critical }}</span></div>
 </section>
 <section class="panel">
-  <h2>Фильтры и экспорт</h2>
+  <h2>Дополнительные фильтры и экспорт</h2>
   <form id="filter-form" method="post" action="/reports/{{ metadata.id }}/exports" class="filter-grid">
     <input type="hidden" name="report_mode" value="split">
     <label>Название экспорта<input name="title" value="Vulnerability reports"></label>
@@ -49,7 +62,7 @@
   </div>
 </section>
 <section class="panel">
-  <h2>Findings ({{ findings_count }})</h2>
+  <h2>Preview findings ({{ findings_count }}, first page only)</h2>
   <div class="table-wrap">
     <table>
       <thead><tr><th>Host</th><th>Source</th><th>Rule</th><th>Title</th><th>Status</th><th>Severity</th><th>CVSS</th><th>CVE</th><th>Package</th></tr></thead>

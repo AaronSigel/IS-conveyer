@@ -1,0 +1,204 @@
+rules:
+  - id: package_update
+    action_key: package_update
+    title: Update vulnerable software packages
+    group: Update vulnerable software packages
+    match:
+      finding_types: [software_vulnerability]
+    subsystem: software
+    priority_hint: P2
+    summary: Update affected packages to fixed versions or latest security updates from the approved repository
+    commands:
+      - "sudo apt update"
+      - "sudo apt install --only-upgrade {packages}"
+    verification:
+      - "apt list --upgradable"
+      - "dpkg -l | grep -E '{package_pattern}'"
+      - "repeat Wazuh vulnerability scan"
+    rollback: Use package manager history or restore from snapshot if update causes regression
+
+  - id: aide
+    action_key: aide
+    group: Configure AIDE integrity monitoring
+    match:
+      title_patterns: ["AIDE", "integrity"]
+    subsystem: integrity_monitoring
+    priority_hint: P2
+    summary: Install AIDE, initialize the database, and enable scheduled integrity checks
+    commands:
+      - "sudo apt update"
+      - "sudo apt install aide aide-common"
+      - "sudo aideinit"
+      - "sudo systemctl enable --now dailyaidecheck.timer"
+    verification:
+      - "dpkg -s aide aide-common"
+      - "test -f /var/lib/aide/aide.db || test -f /var/lib/aide/aide.db.gz"
+      - "systemctl is-enabled dailyaidecheck.timer"
+    rollback: Disable AIDE timer and restore previous integrity monitoring state if required
+
+  - id: apparmor
+    action_key: apparmor
+    group: Configure AppArmor mandatory access control
+    match:
+      title_patterns: ["AppArmor"]
+    subsystem: access_control
+    priority_hint: P2
+    summary: Ensure AppArmor is installed, enabled at boot, active, and enforcing required profiles
+    commands:
+      - "sudo apt update"
+      - "sudo apt install apparmor apparmor-utils"
+      - "sudo systemctl enable --now apparmor"
+    verification:
+      - command: "systemctl is-active apparmor"
+        expected_result: apparmor service is active
+      - command: "apparmor_status"
+        expected_result: Profiles are loaded and enforced where required
+        requires_root: true
+    rollback: Restore previous bootloader and AppArmor package/service state
+
+  - id: pam
+    action_key: pam
+    group: Configure PAM password and lockout policy
+    match:
+      requirement_prefixes: ["5.3"]
+      title_patterns: ["PAM", "password", "faillock"]
+    subsystem: access_control
+    priority_hint: P2
+    summary: Apply password quality, history, and account lockout policy through PAM configuration
+    commands:
+      - "sudo pam-auth-update --enable faillock"
+    verification:
+      - command: "grep -R \"pam_faillock\\|pam_pwquality\\|pam_pwhistory\" /etc/pam.d /etc/security || true"
+        expected_result: PAM modules and policy settings are present
+    rollback: Restore previous PAM files from backup and test login in an active root session before closing it
+
+  - id: auditd
+    action_key: auditd
+    group: Configure auditd and audit rules
+    match:
+      title_patterns: ["audit", "auditd", "augenrules"]
+    subsystem: audit
+    priority_hint: P2
+    summary: Install auditd, load audit rules, and verify audit subsystem status
+    commands:
+      - "sudo apt update"
+      - "sudo apt install auditd audispd-plugins"
+      - "sudo systemctl enable --now auditd"
+      - "sudo augenrules --load"
+    verification:
+      - "systemctl is-active auditd"
+      - "auditctl -s"
+      - "augenrules --check"
+    rollback: Restore previous audit rules and service configuration
+
+  - id: login_banners
+    action_key: login_banners
+    group: Configure login banners
+    match:
+      title_patterns: ["banner", "motd", "/etc/issue"]
+    subsystem: access_control
+    priority_hint: P3
+    summary: Apply approved local and remote login warning banners without exposing system details
+    verification:
+      - "cat /etc/issue /etc/issue.net"
+      - "grep -R '^Banner ' /etc/ssh/sshd_config /etc/ssh/sshd_config.d 2>/dev/null || true"
+    rollback: Restore previous banner files and SSH banner configuration
+
+  - id: time_sync
+    action_key: time_sync
+    group: Configure time synchronization
+    match:
+      title_patterns: ["chrony", "NTP", "time synchronization"]
+    subsystem: time_sync
+    priority_hint: P3
+    summary: Use one time synchronization service and verify it is enabled, synchronized, and using the approved time source
+    commands:
+      - "sudo apt update"
+      - "sudo apt install chrony"
+      - "sudo systemctl enable --now chrony"
+    verification:
+      - "systemctl is-enabled chrony"
+      - "systemctl is-active chrony"
+      - "chronyc tracking"
+    rollback: Restore previous time synchronization service and configuration
+
+  - id: core_dumps
+    action_key: core_dumps
+    group: Disable and harden core dump handling
+    match:
+      title_patterns: ["core dump", "coredump"]
+    subsystem: kernel
+    priority_hint: P3
+    summary: Disable or restrict core dumps through systemd-coredump, sysctl, and limits configuration
+    verification:
+      - "sysctl fs.suid_dumpable"
+      - "systemd-analyze cat-config systemd/coredump.conf"
+      - "grep -R \"hard core\" /etc/security/limits.conf /etc/security/limits.d || true"
+    rollback: Restore previous sysctl, limits, or systemd-coredump configuration
+
+  - id: kernel_modules
+    action_key: kernel_modules
+    group: Disable unused kernel modules
+    match:
+      title_patterns: ["kernel module", "filesystem"]
+    subsystem: kernel
+    priority_hint: P2
+    summary: Disable unused or risky kernel modules through modprobe configuration
+    rollback: Remove the module denylist only after confirming operational dependency
+
+  - id: cron_at
+    action_key: cron_at
+    group: Harden cron and at access
+    match:
+      title_patterns: ["cron", " at "]
+    subsystem: access_control
+    priority_hint: P3
+    summary: Restrict cron and at usage to authorized administrators and verify allow/deny file permissions
+    verification:
+      - "stat -c '%a %U %G %n' /etc/cron.allow /etc/at.allow 2>/dev/null || true"
+      - "stat -c '%a %U %G %n' /etc/cron.deny /etc/at.deny 2>/dev/null || true"
+    rollback: Restore previous cron/at allow and deny files
+
+  - id: ssh
+    action_key: ssh
+    group: Harden sshd_config
+    match:
+      title_patterns: ["SSH", "sshd_config"]
+    subsystem: access_control
+    priority_hint: P1
+    summary: Apply SSH daemon hardening in sshd_config.d and reload sshd after syntax validation
+    commands:
+      - "sudo sshd -t"
+      - "sudo systemctl reload ssh"
+    verification:
+      - "sshd -T"
+      - "systemctl status ssh"
+    rollback: Remove or restore the changed sshd_config.d drop-in and reload ssh
+
+  - id: tmp_mount_options
+    action_key: tmp_mount_options
+    group: Harden temporary filesystems
+    match:
+      title_patterns: ["/tmp", "/dev/shm", "temporary"]
+    subsystem: filesystem
+    priority_hint: P3
+    summary: Apply nodev, nosuid, and noexec options to temporary filesystems where required
+    verification:
+      - "findmnt -kn /tmp"
+      - "findmnt -kn /dev/shm"
+    rollback: Restore previous fstab or systemd mount unit options
+
+  - id: insecure_services
+    action_key: insecure_services
+    group: Remove insecure clients and services
+    match:
+      title_patterns: ["telnet", "rsh", "nis", "talk"]
+    subsystem: software
+    priority_hint: P2
+    summary: Remove legacy clients and services that expand attack surface without business justification
+    commands:
+      - "sudo apt purge telnet rsh-client nis talk 2>/dev/null || true"
+      - "sudo apt autoremove"
+    verification:
+      - "dpkg -l | grep -E '^(ii|hi)\\s+(telnet|rsh-client|nis|talk)\\b' || true"
+    rollback: Reinstall a removed package only after documenting accepted business need

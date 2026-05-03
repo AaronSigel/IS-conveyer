@@ -10,6 +10,7 @@ import yaml
 
 DEFAULT_RULES = pathlib.Path(__file__).resolve().parents[1] / "config" / "applicability_rules.yaml"
 EXCEPTION_STATUSES = {"not_applicable", "accepted_risk", "manual_review", "environment_specific"}
+VALID_FIREWALL_BACKENDS = {"ufw", "nftables", "iptables", "none"}
 
 
 @lru_cache(maxsize=4)
@@ -65,6 +66,46 @@ def _rule_matches(rule: dict[str, Any], finding: dict[str, Any]) -> bool:
     return False
 
 
+def _firewall_backend_from_text(text: str) -> str | None:
+    if "ufw" in text or "uncomplicated firewall" in text:
+        return "ufw"
+    if "nftables" in text or re.search(r"\bnft\b", text):
+        return "nftables"
+    if "iptables" in text or "ip6tables" in text:
+        return "iptables"
+    return None
+
+
+def _selected_firewall_backend(policy_options: dict[str, Any] | None) -> str:
+    backend = str((policy_options or {}).get("firewall_backend") or "").strip().lower()
+    return backend if backend in VALID_FIREWALL_BACKENDS else ""
+
+
+def _firewall_applicability(finding: dict[str, Any], policy_options: dict[str, Any] | None) -> dict[str, Any] | None:
+    text = _finding_text(finding)
+    if "firewall" not in text and "ufw" not in text and "nftables" not in text and "iptables" not in text and "ip6tables" not in text:
+        return None
+    selected = _selected_firewall_backend(policy_options)
+    finding_backend = _firewall_backend_from_text(text)
+    if selected == "none":
+        return _applicability_record(
+            "not_applicable",
+            rule={
+                "id": "firewall_backend_none",
+                "reason": "Host firewall remediation is disabled by profile option firewall_backend=none.",
+            },
+        )
+    if selected and finding_backend and finding_backend != selected:
+        return _applicability_record(
+            "environment_specific",
+            rule={
+                "id": "firewall_backend_conflict",
+                "reason": f"Finding belongs to {finding_backend}, but the selected firewall backend is {selected}.",
+            },
+        )
+    return None
+
+
 def _applicability_record(status: str, *, rule: dict[str, Any] | None = None) -> dict[str, Any]:
     rule = rule or {}
     if status not in EXCEPTION_STATUSES:
@@ -103,6 +144,10 @@ def apply_applicability(findings: list[dict[str, Any]], policy_options: dict[str
         if isinstance(override, dict):
             status = str(override.get("status") or "applicable")
             finding["applicability"] = _applicability_record(status, rule=override)
+            continue
+        firewall_record = _firewall_applicability(finding, policy_options)
+        if firewall_record is not None:
+            finding["applicability"] = firewall_record
             continue
         matched = next((rule for rule in rules if _rule_matches(rule, finding)), None)
         finding["applicability"] = _applicability_record(str(matched.get("status")) if matched else "applicable", rule=matched)

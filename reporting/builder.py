@@ -50,6 +50,25 @@ def _summary(
     }
 
 
+def _compact_raw_refs(findings: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    refs: dict[str, dict[str, Any]] = {}
+    for finding in findings:
+        for raw_ref in finding.get("raw_refs", []) or []:
+            if not isinstance(raw_ref, dict):
+                continue
+            compact = {
+                "asset": raw_ref.get("asset"),
+                "source": raw_ref.get("source"),
+                "file": raw_ref.get("file"),
+                "id": raw_ref.get("id"),
+                "ref": raw_ref.get("ref") or finding.get("raw_ref"),
+                "finding_uid": finding.get("finding_uid"),
+            }
+            key = "|".join(str(compact.get(part) or "") for part in ("source", "file", "id", "asset", "finding_uid"))
+            refs[key] = {key_: value for key_, value in compact.items() if value not in (None, "", [], {})}
+    return sorted(refs.values(), key=lambda item: (str(item.get("source", "")), str(item.get("asset", "")), str(item.get("id", ""))))
+
+
 def _run_context(metadata: dict[str, Any] | None, profile: str | None) -> dict[str, Any]:
     metadata = metadata or {}
     return {
@@ -67,7 +86,6 @@ def _policy_options(metadata: dict[str, Any] | None, policy_options: dict[str, A
     for source in (metadata.get("policy_options"), metadata.get("options"), policy_options):
         if isinstance(source, dict):
             options.update(source)
-    options.setdefault("firewall_backend", "ufw")
     return options
 
 
@@ -89,7 +107,7 @@ def build_normalized_report(
     options = _policy_options(metadata, policy_options)
     apply_applicability(deduped, options)
     for finding in deduped:
-        finding["priority"] = calculate_priority(finding)
+        finding.update(calculate_priority(finding))
 
     active_findings = [item for item in deduped if not is_under_evaluation(item) and str(item.get("status", "")).lower() != "pass"]
     exceptions = [item for item in active_findings if not is_in_remediation_scope(item)]
@@ -99,7 +117,7 @@ def build_normalized_report(
     inventory_source = asset_enrichment or (metadata or {}).get("asset_enrichment")
     assets = build_asset_inventory(deduped, inventory_source)
     generated = generated_at or datetime.now().astimezone()
-    raw_refs = [ref for finding in deduped for ref in finding.get("raw_refs", [])]
+    raw_refs = _compact_raw_refs(deduped)
 
     return {
         "report_id": report_id or stable_id("REPORT", _run_context(metadata, profile).get("run_id"), generated.isoformat()),
@@ -107,6 +125,7 @@ def build_normalized_report(
         "run": _run_context(metadata, profile),
         "policy_options": options,
         "scope": {"assets": assets},
+        "assets": assets,
         "summary": _summary(len(raw_findings), len(selected_raw), deduped, remediation_groups, exceptions),
         "remediation_plan": remediation_groups,
         "remediation_groups": remediation_groups,

@@ -1,0 +1,24 @@
+{
+  "top_level_keys": [
+    "report_id",
+    "generated_at",
+    "run",
+    "scope",
+    "assets",
+    "summary",
+    "remediation_plan",
+    "remediation_groups",
+    "findings",
+    "under_evaluation",
+    "raw_refs"
+  ],
+  "expected_active_findings": 2,
+  "expected_package_groups": 1,
+  "expected_configuration_groups": 1,
+  "expected_asset": {
+    "agent.name": "target1",
+    "agent.ip": "192.168.56.11",
+    "agent.status": "active",
+    "host.os.kernel": "6.8.0-106-generic"
+  }
+}

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import argparse
 import json
+import logging
 import pathlib
 import re
 import sys
@@ -22,6 +23,12 @@ from reporting.renderers.legacy_markdown import render_report as render_legacy_r
 from reporting.services import report_generation
 from reporting.services.report_export import (
     build_normalized_report_for_export,
+)
+from reporting.technical_mvp import (
+    ReportOptions,
+    build_technical_report,
+    load_wazuh_findings,
+    render_technical_report,
 )
 
 DEFAULT_FINDINGS = PROJECT_ROOT / "artifacts" / "unified-findings.json"
@@ -54,8 +61,19 @@ def parse_args():
     parser.add_argument("--findings", default=None, help="Path to unified findings JSON.")
     parser.add_argument("--input", dest="input_alias", default=None, help="Backward compatible alias for --findings.")
     parser.add_argument("--output", default=str(DEFAULT_OUTPUT), help="Path to markdown report.")
-    parser.add_argument("--mode", choices=("technical", "legacy"), default="technical", help="Report pipeline to use.")
+    parser.add_argument("--format", choices=("md", "html"), help="MVP report format. Enables file/directory Wazuh JSON input mode.")
+    parser.add_argument("--min-severity", default="medium", choices=("critical", "high", "medium", "low", "info"), help="Minimum severity for MVP report.")
+    parser.add_argument("--include-low", action="store_true", help="Include low severity findings in MVP report.")
+    parser.add_argument("--include-passed", action="store_true", help="Include passed checks in MVP main report.")
+    parser.add_argument("--include-raw-appendix", action="store_true", help="Embed raw source JSON appendix in MVP report.")
+    parser.add_argument("--max-records", type=int, default=200, help="Maximum rows included in MVP main technical sections.")
+    parser.add_argument("--summary-only", action="store_true", help="Generate compact MVP executive summary.")
+    parser.add_argument("--system-name", default="Проверяемая информационная система", help="Checked system/device name for MVP report.")
+    parser.add_argument("--tool-version", default="IS-conveyer technical MVP", help="Tool version label for MVP report.")
+    parser.add_argument("--mode", choices=("summary", "full", "technical", "legacy"), default="summary", help="Report pipeline to use.")
     parser.add_argument("--legacy", action="store_true", help="Backward compatible shortcut for --mode legacy.")
+    parser.add_argument("--max-detailed-findings", type=int, default=25, help="Maximum detailed finding cards in summary mode.")
+    parser.add_argument("--min-detailed-priority", default="P2", help="Lowest priority shown as detailed cards in summary mode.")
     parser.add_argument("--normalized-output", help="Path to normalized_report.json.")
     parser.add_argument("--html-output", help="Path to technical_report.html.")
     parser.add_argument("--pdf-output", help="Path to technical_report.pdf.")
@@ -77,7 +95,30 @@ def parse_args():
     args.findings = args.findings or args.input_alias or str(DEFAULT_FINDINGS)
     if args.legacy:
         args.mode = "legacy"
+    if args.mode == "technical":
+        args.mode = "summary"
     return args
+
+
+def mvp_main(args):
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
+    raw_findings, raw_appendix = load_wazuh_findings(args.findings)
+    options = ReportOptions(
+        min_severity=args.min_severity,
+        include_low=args.include_low,
+        include_passed=args.include_passed,
+        include_raw_appendix=args.include_raw_appendix,
+        max_records=args.max_records,
+        summary_only=args.summary_only,
+        source_name=str(pathlib.Path(args.findings)),
+        system_name=args.system_name,
+        tool_version=args.tool_version,
+    )
+    report = build_technical_report(raw_findings, raw_appendix, options)
+    render_technical_report(report, args.output, args.format)
+    print(f"Technical {args.format.upper()} report written to {args.output}")
+    print(f"Processed files/findings: {len(raw_appendix)} files, {report['stats']['processed_findings']} findings")
+    print(f"Included findings: {report['stats']['included_findings']}; dropped: {report['stats']['dropped']}")
 
 
 def split_values(raw):
@@ -890,6 +931,19 @@ def render_technical_outputs(report, json_path, html_path, pdf_path, skip_pdf=Fa
     report_generation.render_technical_outputs(report, json_path, html_path, pdf_path, skip_pdf)
 
 
+PRIORITY_ORDER = {"P1": 4, "P2": 3, "P3": 2, "P4": 1}
+
+
+def detailed_findings_for_mode(report, mode, max_detailed_findings, min_detailed_priority):
+    findings = list(report.get("findings", []))
+    findings.sort(key=lambda item: (-int(item.get("priority_score", 0)), item.get("finding_uid", "")))
+    if mode == "full":
+        return findings
+    threshold = PRIORITY_ORDER.get(str(min_detailed_priority or "P2").upper(), PRIORITY_ORDER["P2"])
+    selected = [item for item in findings if PRIORITY_ORDER.get(str(item.get("priority", "P4")).upper(), 0) >= threshold]
+    return selected[: max(0, int(max_detailed_findings or 0))]
+
+
 def split_technical_findings(selected_findings, host, kind):
     host_findings = [item for item in selected_findings if str(item.get("host")) == str(host)]
     if kind == "packages":
@@ -933,6 +987,9 @@ def legacy_main(args, findings, profile, metadata, enrichment, filters, report_d
 
 def main():
     args = parse_args()
+    if args.format:
+        mvp_main(args)
+        return
     findings = load_findings(args.findings)
     profile = service_load_profile(args.profile)
     metadata = load_metadata(args.metadata)
@@ -952,9 +1009,16 @@ def main():
         filtered_findings=selected_findings,
         metadata=metadata,
         profile=profile_name,
-        report_id="default",
+        report_id=metadata.get("run_id") or metadata.get("id") or "default",
         generated_at=report_datetime,
     )
+    report["mode"] = args.mode
+    report["detailed_findings"] = detailed_findings_for_mode(report, args.mode, args.max_detailed_findings, args.min_detailed_priority)
+    report["render_options"] = {
+        "mode": args.mode,
+        "max_detailed_findings": args.max_detailed_findings,
+        "min_detailed_priority": args.min_detailed_priority,
+    }
     json_path, html_path, pdf_path = technical_output_paths(args)
     render_technical_outputs(report, json_path, html_path, pdf_path, args.skip_pdf)
     split_reports = render_technical_split_reports(args, findings, selected_findings, metadata, profile_name, report_datetime)

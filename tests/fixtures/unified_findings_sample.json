@@ -1,0 +1,65 @@
+[
+  {
+    "host": "target1",
+    "source": "wazuh_sca",
+    "category": "configuration",
+    "rule_id": "cis_ubuntu24-04:35500",
+    "title": "1.1.1.1 Ensure cramfs kernel module is not available (Automated)",
+    "severity": "high",
+    "status": "fail",
+    "evidence": ["Command: modprobe -n -v cramfs", "Compliance: cis: 1.1.1.1"],
+    "remediation": "Disable the cramfs kernel module.",
+    "finding_type": "configuration_noncompliance",
+    "sca_check_id": 35500,
+    "agent": {
+      "id": "001",
+      "name": "target1",
+      "ip": "192.168.56.11",
+      "status": "active",
+      "version": "Wazuh v4.14.5"
+    },
+    "host_os": {
+      "full": "Ubuntu 24.04.4 LTS (Noble Numbat)",
+      "version": "24.04.4 LTS (Noble Numbat)",
+      "kernel": "6.8.0-106-generic",
+      "architecture": "x86_64"
+    },
+    "wazuh_sca": {
+      "id": 35500,
+      "target": "modprobe -n -v cramfs",
+      "result": "failed",
+      "checks": ["c:modprobe -n -v cramfs -> r:^install /bin/false"],
+      "compliance": ["cis: 1.1.1.1"]
+    }
+  },
+  {
+    "host": "target1",
+    "source": "wazuh_vulnerability",
+    "category": "vulnerability",
+    "rule_id": "VULN_SUDO_CVE_2025_32463",
+    "title": "Sudo chroot option local privilege escalation",
+    "severity": "critical",
+    "status": "fail",
+    "finding_type": "software_vulnerability",
+    "external_ids": {"cve": "CVE-2025-32463"},
+    "cvss": {"base_score": 9.3, "version": "3.1"},
+    "affected_component": {
+      "package": "sudo",
+      "version": "1.9.15p5-3ubuntu5",
+      "architecture": "amd64",
+      "type": "deb"
+    },
+    "wazuh_vulnerability": {
+      "_id": "001_CVE-2025-32463_sudo",
+      "agent": {"id": "001", "name": "target1", "version": "v4.14.5"},
+      "package": {"name": "sudo", "version": "1.9.15p5-3ubuntu5", "architecture": "amd64", "type": "deb"},
+      "vulnerability": {
+        "id": "CVE-2025-32463",
+        "severity": "Critical",
+        "under_evaluation": false,
+        "scanner": {"condition": "Package less than 1.9.15p5-3ubuntu5.24.04.1"},
+        "score": {"base": 9.3, "version": "3.1"}
+      }
+    }
+  }
+]

@@ -1,0 +1,40 @@
+[
+  {
+    "_id": "001_CVE-2025-32463_sudo",
+    "agent": {
+      "id": "001",
+      "name": "target1",
+      "type": "Wazuh",
+      "version": "v4.14.5"
+    },
+    "host": {
+      "os": {
+        "full": "Ubuntu 24.04.4 LTS (Noble Numbat)",
+        "kernel": "6.8.0-106-generic",
+        "name": "Ubuntu",
+        "platform": "ubuntu",
+        "version": "24.04.4"
+      }
+    },
+    "package": {
+      "architecture": "amd64",
+      "name": "sudo",
+      "type": "deb",
+      "version": "1.9.15p5-3ubuntu5"
+    },
+    "vulnerability": {
+      "id": "CVE-2025-32463",
+      "description": "Sudo chroot option local privilege escalation.",
+      "severity": "Critical",
+      "under_evaluation": false,
+      "scanner": {
+        "condition": "Package less than 1.9.15p5-3ubuntu5.24.04.1",
+        "source": "Canonical Security Tracker"
+      },
+      "score": {
+        "base": 9.3,
+        "version": "3.1"
+      }
+    }
+  }
+]

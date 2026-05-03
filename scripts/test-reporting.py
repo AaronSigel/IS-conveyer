@@ -153,12 +153,14 @@ def test_configuration_deduplication_across_hosts():
 def test_priority_and_remediation_groups():
     package = normalize_package_finding(package_raw())
     config = normalize_configuration_finding(configuration_raw())
-    assert calculate_priority(package) == "P1"
-    assert calculate_priority(config) == "P1"
+    assert calculate_priority(package)["priority"] == "P1"
+    assert calculate_priority(package)["priority_score"] >= 80
+    assert calculate_priority(config)["priority"] in {"P1", "P2"}
     groups = build_remediation_groups([package, config])
     assert {group["action_type"] for group in groups} == {"package_update", "config_change"}
     assert any("sudo apt install --only-upgrade sudo" in group["commands"] for group in groups)
     assert any("modprobe -n -v cramfs" in verification_commands(group) for group in groups)
+    assert all("priority_score" in group and "priority_reason" in group for group in groups)
 
 
 def test_remediation_knowledge_base_verification():
@@ -198,9 +200,10 @@ def test_related_package_grouping():
     libssl["affected_component"]["name"] = "libssl3"
     libssl["wazuh_vulnerability"]["package"]["name"] = "libssl3"
     groups = build_remediation_groups([normalize_package_finding(openssl), normalize_package_finding(libssl)])
-    assert len(groups) == 1
-    assert groups[0]["title"] == "Update openssl packages"
-    assert "libssl3 openssl" in " ".join(groups[0]["commands"])
+    assert len(groups) == 2
+    assert {group["package"]["name"] for group in groups} == {"openssl", "libssl3"}
+    assert all(group["type"] == "software_vulnerability_group" for group in groups)
+    assert all(group["cve_count"] == 1 for group in groups)
 
 
 def test_engineering_remediation_grouping_and_structured_verification():

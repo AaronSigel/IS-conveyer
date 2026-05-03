@@ -212,7 +212,7 @@ def main():
         assert normalized["findings"]
         assert normalized["remediation_plan"]
         assert "План устранения" in technical_html
-        assert "Verification checklist" in technical_html
+        assert "Порядок проверки устранения" in technical_html
         assert "Full normalized JSON" not in technical_html
         assert "Appendix A. Raw Wazuh fields" not in technical_html
         assert "{{ report|json }}" not in technical_html

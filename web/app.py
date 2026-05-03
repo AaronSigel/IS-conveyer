@@ -93,6 +93,45 @@ def report_json(run_id: str):
     return FileResponse(path, media_type="application/json", filename=f"{run_id}-unified-findings.json")
 
 
+@app.get("/reports/{run_id}/normalized")
+def report_normalized_json(run_id: str):
+    path = runs.run_dir(run_id) / "normalized_report.json"
+    if not path.exists():
+        return PlainTextResponse("normalized_report.json is not available for this run", status_code=404)
+    return FileResponse(path, media_type="application/json", filename=f"{run_id}-normalized_report.json")
+
+
+@app.get("/reports/{run_id}/html")
+def report_html(run_id: str):
+    path = runs.run_dir(run_id) / "technical_report.html"
+    if not path.exists():
+        return PlainTextResponse("technical_report.html is not available for this run", status_code=404)
+    return FileResponse(path, media_type="text/html", filename=f"{run_id}-technical_report.html")
+
+
+@app.get("/reports/{run_id}/pdf")
+def report_pdf(run_id: str):
+    path = runs.run_dir(run_id) / "technical_report.pdf"
+    if not path.exists():
+        return PlainTextResponse("technical_report.pdf is not available for this run. Check logs for PDF renderer availability.", status_code=404)
+    return FileResponse(path, media_type="application/pdf", filename=f"{run_id}-technical_report.pdf")
+
+
+@app.get("/reports/{run_id}/raw/{artifact}")
+def report_raw_artifact(run_id: str, artifact: str):
+    allowed = {
+        "wazuh-sca": ("wazuh-sca.json", "application/json"),
+        "wazuh-vulnerabilities": ("wazuh-vulnerabilities.json", "application/json"),
+    }
+    if artifact not in allowed:
+        return PlainTextResponse("Unknown raw artifact", status_code=404)
+    filename, media_type = allowed[artifact]
+    path = runs.run_dir(run_id) / "raw" / filename
+    if not path.exists():
+        return PlainTextResponse(f"{filename} is not available for this run", status_code=404)
+    return FileResponse(path, media_type=media_type, filename=f"{run_id}-{filename}")
+
+
 @app.post("/reports/{run_id}/preview")
 async def report_preview(run_id: str, request: Request):
     form = dict(await request.form())

@@ -8,11 +8,14 @@ from reporting.common import stable_id, unique_sorted
 
 def package_dedup_key(finding: dict[str, Any]) -> tuple[Any, ...]:
     package = finding.get("package", {})
+    asset = next(iter(finding.get("affected_assets", []) or ["unknown"]))
+    agent_id = finding.get("asset_details", {}).get(asset, {}).get("agent.id") or asset
     return (
+        agent_id,
         finding.get("cve"),
         package.get("name"),
         package.get("installed_version"),
-        package.get("fixed_condition"),
+        package.get("architecture"),
     )
 
 

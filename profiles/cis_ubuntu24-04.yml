@@ -7,6 +7,9 @@ metadata:
 
 policy_options:
   firewall_backend: ufw
+  time_sync_service: chrony
+  apparmor_required: true
+  ipv6_enabled: true
 
 vulnerabilities:
   - id: VULN_OPENSSH_CVE_2024_6387

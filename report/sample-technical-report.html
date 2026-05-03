@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <title>Технический отчёт по результатам автоматизированной проверки ИБ</title>
+  <style>
+    body { margin: 0; color: #1d2327; background: #f5f1e8; font: 15px/1.5 Georgia, "Times New Roman", serif; }
+    main { max-width: 1180px; margin: 0 auto; padding: 42px 28px 72px; background: #fffdf8; box-shadow: 0 20px 70px rgba(36, 28, 15, .14); }
+    h1, h2, h3 { color: #102a43; line-height: 1.15; }
+    h1 { font-size: 34px; margin: 0 0 14px; text-transform: uppercase; letter-spacing: .02em; }
+    h2 { margin-top: 42px; padding-bottom: 8px; border-bottom: 2px solid #c9a24d; }
+    h3 { margin-top: 28px; }
+    .title-block { border: 2px solid #102a43; padding: 28px; background: linear-gradient(135deg, #fffdf8 0%, #efe4cc 100%); }
+    .meta-grid, .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; margin: 18px 0; }
+    .metric, .meta { border: 1px solid #d8c59b; background: #fffaf0; padding: 12px; }
+    .metric span, .meta span { display: block; color: #667085; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
+    .metric b, .meta b { display: block; margin-top: 4px; font-size: 22px; color: #102a43; }
+    table { width: 100%; border-collapse: collapse; margin: 12px 0 22px; font-size: 13px; }
+    th, td { border: 1px solid #d8d0c1; padding: 8px 9px; vertical-align: top; }
+    th { background: #102a43; color: #fff; font-weight: 600; }
+    tr:nth-child(even) td { background: #fbf7ee; }
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; color: #fff; font-size: 12px; text-transform: uppercase; }
+    .critical { background: #9b1c1c; }
+    .high { background: #b45309; }
+    .medium { background: #8a6d1d; }
+    .low { background: #4d7c0f; }
+    .info { background: #475569; }
+    code, pre { font-family: Consolas, "Courier New", monospace; }
+    pre { overflow: auto; background: #102a43; color: #f8fafc; padding: 14px; }
+    .note { padding: 14px 16px; background: #edf4f8; border-left: 4px solid #2f6f8f; }
+    @media (max-width: 760px) { main { padding: 24px 12px; } table { display: block; overflow-x: auto; } h1 { font-size: 24px; } }
+  </style>
+</head>
+<body>
+<main>
+  <section class="title-block">
+    <h1>Технический отчёт по результатам автоматизированной проверки ИБ</h1>
+    <div class="meta-grid">
+      <div class="meta"><span>Дата формирования</span><b>2026-05-03T09:22:08+03:00</b></div>
+      <div class="meta"><span>Проверяемый объект</span><b>Проверяемая информационная система</b></div>
+      <div class="meta"><span>Версия инструмента</span><b>IS-conveyer technical MVP</b></div>
+      <div class="meta"><span>Источник данных</span><b>report\samples\wazuh-mvp</b></div>
+    </div>
+    <p><b>Проверенные хосты:</b> target1, target2</p>
+  </section>
+
+  <h2>1. Общие сведения о проверке</h2>
+  <p>Цель проверки: автоматизированная оценка состояния конфигурации устройства и установленного программного обеспечения по данным Wazuh.</p>
+  <p>Используемые инструменты: Wazuh SCA, Wazuh Vulnerability Detection, IS-conveyer reporting.</p>
+  <p class="note">Ограничения проверки: система анализирует конфигурацию устройства и установленное программное обеспечение, но не выполняет полноценное исследование архитектуры, организационных процессов и эксплуатации ИС.</p>
+
+  <h2>2. Методика проверки</h2>
+  <p>Данные получены из Wazuh JSON, нормализованы, дедуплицированы и преобразованы в технические findings/passport. Результаты разделены на уязвимости кода по CVE и уязвимости конфигурации по SCA-проверкам.</p>
+
+  <h2>3. Агрегированная статистика</h2>
+  <div class="stats-grid">
+    <div class="metric"><span>Хостов</span><b>2</b></div>
+    <div class="metric"><span>Исходных findings</span><b>4</b></div>
+    <div class="metric"><span>Уникальных findings</span><b>4</b></div>
+    <div class="metric"><span>В отчёте</span><b>3</b></div>
+    <div class="metric"><span>Уникальных CVE</span><b>1</b></div>
+    <div class="metric"><span>Config fail</span><b>2</b></div>
+  </div>
+  <table>
+    <thead><tr><th>Severity</th><th>Count</th></tr></thead>
+    <tbody>
+      <tr><td><span class="badge critical">critical</span></td><td>1</td></tr>
+      <tr><td><span class="badge high">high</span></td><td>1</td></tr>
+      <tr><td><span class="badge medium">medium</span></td><td>1</td></tr>
+      <tr><td><span class="badge low">low</span></td><td>0</td></tr>
+      <tr><td><span class="badge info">info</span></td><td>0</td></tr>
+    </tbody>
+  </table>
+  <table>
+    <thead><tr><th>Status</th><th>Count</th></tr></thead>
+    <tbody>
+      <tr><td>fail</td><td>3</td></tr>
+      <tr><td>pass</td><td>1</td></tr>
+      <tr><td>not_applicable</td><td>0</td></tr>
+      <tr><td>unknown</td><td>0</td></tr>
+    </tbody>
+  </table>
+
+  <h2>4. Уязвимости установленного программного обеспечения</h2>
+  <h3>target1</h3>
+  <table>
+    <thead><tr><th>Host ID</th><th>Хост</th><th>ОС</th><th>Пакет</th><th>Установленная версия</th><th>Исправленная версия</th><th>CVE</th><th>Критичность</th><th>CVSS</th><th>Описание</th><th>Источник</th><th>Ссылки</th><th>Статус</th></tr></thead>
+    <tbody>
+      <tr><td>001</td><td>target1</td><td>Ubuntu 24.04.4 LTS (Noble Numbat)</td><td>sudo</td><td>1.9.15p5-3ubuntu5</td><td>1.9.15p5-3ubuntu5.24.04.1</td><td>CVE-2025-32463</td><td><span class="badge critical">critical</span></td><td>9.3</td><td>Sudo chroot option local privilege escalation.</td><td>Canonical Security Tracker</td><td><a href="https://cti.wazuh.com/vulnerabilities/cves/CVE-2025-32463">https://cti.wazuh.com/vulnerabilities/cves/CVE-2025-32463</a><br><a href="https://ubuntu.com/security/CVE-2025-32463">https://ubuntu.com/security/CVE-2025-32463</a><br><a href="https://www.cve.org/CVERecord?id=CVE-2025-32463">https://www.cve.org/CVERecord?id=CVE-2025-32463</a></td><td>fail</td></tr>
+    </tbody>
+  </table>
+
+  <h2>5. Нарушения конфигурации</h2>
+  <h3>target1</h3>
+  <table>
+    <thead><tr><th>Host ID</th><th>Хост</th><th>ID проверки</th><th>Название</th><th>Описание</th><th>Критичность</th><th>Фактическое значение</th><th>Ожидаемое состояние</th><th>Рекомендация</th><th>Стандарт</th></tr></thead>
+    <tbody>
+      <tr><td>unknown</td><td>target1</td><td>cis 1.1.1.1</td><td>1.1.1.1 Ensure cramfs kernel module is not available (Automated)</td><td>The cramfs filesystem type is not commonly used and should be disabled.</td><td><span class="badge high">high</span></td><td>failed</td><td>r:^install /bin/false</td><td>Edit or create a file in `/etc/modprobe.d/` ending in `.conf` and add `install cramfs /bin/false`.</td><td>cis</td></tr>
+      <tr><td>unknown</td><td>target1</td><td>cis 5.1.20</td><td>5.1.20 Ensure X11 forwarding is disabled (Automated)</td><td>The SSH daemon should not permit X11 forwarding.</td><td><span class="badge medium">medium</span></td><td>failed</td><td>r:^x11forwarding no$</td><td>Set `X11Forwarding no` in sshd configuration and restart SSH.</td><td>cis</td></tr>
+    </tbody>
+  </table>
+
+  <h2>6. Приоритеты устранения</h2>
+  <table>
+    <thead><tr><th>Проблема</th><th>Тип</th><th>Критичность</th><th>Хосты</th><th>Количество</th><th>Рекомендация</th></tr></thead>
+    <tbody>
+      <tr><td>CVE-2025-32463</td><td>software_vulnerability</td><td><span class="badge critical">critical</span></td><td>target1</td><td>1</td><td>Update affected package to a fixed version</td></tr>
+      <tr><td>1.1.1.1 Ensure cramfs kernel module is not available (Automated)</td><td>configuration_noncompliance</td><td><span class="badge high">high</span></td><td>target1</td><td>1</td><td>Edit or create a file in `/etc/modprobe.d/` ending in `.conf` and add `install cramfs /bin/false`.</td></tr>
+      <tr><td>5.1.20 Ensure X11 forwarding is disabled (Automated)</td><td>configuration_noncompliance</td><td><span class="badge medium">medium</span></td><td>target1</td><td>1</td><td>Set `X11Forwarding no` in sshd configuration and restart SSH.</td></tr>
+    </tbody>
+  </table>
+
+  <h2>7. Вывод</h2>
+  <p>Проверено устройств: 2. В основной части отчёта отражено 3 значимых находок. Выявлено CVE: 1, конфигурационных нарушений: 2. основной риск связан с критичными и высокими находками. В первую очередь рекомендуется устранить записи из раздела приоритетов устранения.</p>
+
+  <h2>8. Приложение A. Паспортная модель findings</h2>
+  <table>
+    <thead><tr><th>ID</th><th>Тип</th><th>Источник</th><th>Объект</th><th>Компонент</th><th>Описание</th><th>Условия</th><th>Опасность</th><th>Последствия</th><th>Обнаружение</th><th>Рекомендации</th><th>Ссылки</th><th>Статус</th></tr></thead>
+    <tbody>
+      <tr><td>PKG-CVE-2025-32463-sudo-1.9.15p5-3ubuntu5-Package-less-than-1.9.15p5-3ubuntu5.24.04.1-18adb5d1</td><td>уязвимость кода</td><td>wazuh_vulnerability</td><td>target1</td><td>sudo</td><td>Sudo chroot option local privilege escalation.</td><td>Package less than 1.9.15p5-3ubuntu5.24.04.1</td><td><span class="badge critical">critical</span></td><td>риск определяется классом найденной уязвимости и уровнем критичности</td><td>Wazuh Vulnerability Detector</td><td>Update affected package to a fixed version</td><td><a href="https://cti.wazuh.com/vulnerabilities/cves/CVE-2025-32463">https://cti.wazuh.com/vulnerabilities/cves/CVE-2025-32463</a><br><a href="https://ubuntu.com/security/CVE-2025-32463">https://ubuntu.com/security/CVE-2025-32463</a><br><a href="https://www.cve.org/CVERecord?id=CVE-2025-32463">https://www.cve.org/CVERecord?id=CVE-2025-32463</a></td><td>fail</td></tr>
+      <tr><td>CFG-cis-1.1.1.1-modprobe--n--v-cramfs-r-install-bin-false-5b68d250</td><td>уязвимость конфигурации</td><td>wazuh_sca</td><td>target1</td><td>cis 1.1.1.1</td><td>The cramfs filesystem type is not commonly used and should be disabled.</td><td>modprobe -n -v cramfs</td><td><span class="badge high">high</span></td><td>Disabling uncommon filesystems reduces the kernel attack surface.</td><td>Wazuh SCA</td><td>Edit or create a file in `/etc/modprobe.d/` ending in `.conf` and add `install cramfs /bin/false`.</td><td><a href="cis">cis</a><br><a href="mitre">mitre</a><br><a href="nist">nist</a><br><a href="iso">iso</a><br><a href="pci_dss">pci_dss</a></td><td>fail</td></tr>
+      <tr><td>CFG-cis-5.1.20-sshd--T-r-x11forwarding-no-eba27012</td><td>уязвимость конфигурации</td><td>wazuh_sca</td><td>target1</td><td>cis 5.1.20</td><td>The SSH daemon should not permit X11 forwarding.</td><td>sshd -T</td><td><span class="badge medium">medium</span></td><td>X11 forwarding expands the SSH session attack surface.</td><td>Wazuh SCA</td><td>Set `X11Forwarding no` in sshd configuration and restart SSH.</td><td><a href="cis">cis</a><br><a href="mitre">mitre</a><br><a href="nist">nist</a><br><a href="iso">iso</a><br><a href="pci_dss">pci_dss</a></td><td>fail</td></tr>
+    </tbody>
+  </table>
+
+</main>
+</body>
+</html>

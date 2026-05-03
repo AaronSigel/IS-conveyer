@@ -1,0 +1,196 @@
+[
+  {
+    "host": "target1",
+    "source": "wazuh_sca",
+    "category": "configuration",
+    "rule_id": "cis_ubuntu24-04:35500",
+    "title": "1.1.1.1 Ensure cramfs kernel module is not available (Automated)",
+    "severity": "high",
+    "status": "fail",
+    "evidence": [
+      "Command: modprobe -n -v cramfs",
+      "Compliance: iso_27001-2013: 1.1.6,1.2.1,2.2.2,2.2.5",
+      "Rules: c:modprobe -n -v cramfs -> r:^install /bin/false"
+    ],
+    "remediation": "Edit or create a file in `/etc/modprobe.d/` ending in `.conf` and add `install cramfs /bin/false`.",
+    "finding_type": "configuration_noncompliance",
+    "description": "The cramfs filesystem type is not commonly used and should be disabled.",
+    "impact": "Disabling uncommon filesystems reduces the kernel attack surface.",
+    "detection_method": "Wazuh SCA policy cis_ubuntu24-04",
+    "sca_check_id": 35500,
+    "wazuh_sca": {
+      "id": 35500,
+      "title": "1.1.1.1 Ensure cramfs kernel module is not available (Automated)",
+      "target": "modprobe -n -v cramfs",
+      "result": "failed",
+      "rationale": "Disabling uncommon filesystems reduces the kernel attack surface.",
+      "remediation": "Edit or create a file in `/etc/modprobe.d/` ending in `.conf` and add `install cramfs /bin/false`.",
+      "description": "The cramfs filesystem type is not commonly used and should be disabled.",
+      "checks": [
+        "c:modprobe -n -v cramfs -> r:^install /bin/false"
+      ],
+      "compliance": [
+        "iso_27001-2013: 1.1.6,1.2.1,2.2.2,2.2.5"
+      ],
+      "condition": "any"
+    }
+  },
+  {
+    "host": "target1",
+    "source": "wazuh_sca",
+    "category": "configuration",
+    "rule_id": "cis_ubuntu24-04:35741",
+    "title": "5.1.20 Ensure X11 forwarding is disabled (Automated)",
+    "severity": "medium",
+    "status": "fail",
+    "evidence": [
+      "Command: sshd -T",
+      "Compliance: cis: 5.1.20",
+      "Rules: c:sshd -T -> r:^x11forwarding no$"
+    ],
+    "remediation": "Set `X11Forwarding no` in sshd configuration and restart SSH.",
+    "finding_type": "configuration_noncompliance",
+    "description": "The SSH daemon should not permit X11 forwarding.",
+    "impact": "X11 forwarding expands the SSH session attack surface.",
+    "detection_method": "Wazuh SCA policy cis_ubuntu24-04",
+    "sca_check_id": 35741,
+    "wazuh_sca": {
+      "id": 35741,
+      "title": "5.1.20 Ensure X11 forwarding is disabled (Automated)",
+      "target": "sshd -T",
+      "result": "failed",
+      "rationale": "X11 forwarding expands the SSH session attack surface.",
+      "remediation": "Set `X11Forwarding no` in sshd configuration and restart SSH.",
+      "description": "The SSH daemon should not permit X11 forwarding.",
+      "checks": [
+        "c:sshd -T -> r:^x11forwarding no$"
+      ],
+      "compliance": [
+        "cis: 5.1.20"
+      ],
+      "condition": "all"
+    }
+  },
+  {
+    "host": "target2",
+    "source": "wazuh_sca",
+    "category": "configuration",
+    "rule_id": "cis_ubuntu24-04:35680",
+    "title": "6.2.1.3 Ensure auditd is installed (Automated)",
+    "severity": "medium",
+    "status": "pass",
+    "evidence": [
+      "Compliance: cis: 6.2.1.3",
+      "Package auditd is installed"
+    ],
+    "remediation": "Install the `auditd` package.",
+    "finding_type": "configuration_noncompliance",
+    "description": "auditd should be installed to collect audit events.",
+    "impact": "Without auditd, audit event collection is incomplete.",
+    "detection_method": "Wazuh SCA policy cis_ubuntu24-04",
+    "sca_check_id": 35680,
+    "wazuh_sca": {
+      "id": 35680,
+      "title": "6.2.1.3 Ensure auditd is installed (Automated)",
+      "target": "dpkg-query -s auditd",
+      "result": "passed",
+      "rationale": "Without auditd, audit event collection is incomplete.",
+      "remediation": "Install the `auditd` package.",
+      "description": "auditd should be installed to collect audit events.",
+      "checks": [
+        "Package auditd is installed"
+      ],
+      "compliance": [
+        "cis: 6.2.1.3"
+      ],
+      "condition": "all"
+    }
+  },
+  {
+    "host": "target1",
+    "source": "wazuh_vulnerability",
+    "category": "vulnerability",
+    "rule_id": "VULN_SUDO_CVE_2025_32463",
+    "title": "Sudo chroot option local privilege escalation",
+    "severity": "critical",
+    "status": "fail",
+    "evidence": [
+      "Package: sudo 1.9.15p5-3ubuntu5",
+      "CVE: CVE-2025-32463",
+      "CVSS base: 9.3"
+    ],
+    "remediation": "Update sudo to the fixed Ubuntu 24.04 package version or later.",
+    "finding_type": "software_vulnerability",
+    "external_ids": {
+      "cve": "CVE-2025-32463"
+    },
+    "cvss": {
+      "base_score": 9.3,
+      "vector": "CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:C/C:H/I:H/A:H"
+    },
+    "affected_component": {
+      "package": "sudo",
+      "version": "1.9.15p5-3ubuntu5",
+      "architecture": "amd64",
+      "description": "Provide limited super user privileges to specific users",
+      "size": 1111111,
+      "type": "deb"
+    },
+    "detected_at": "2026-04-30T20:00:00+03:00",
+    "references": [
+      "https://ubuntu.com/security/CVE-2025-32463",
+      "https://cti.wazuh.com/vulnerabilities/cves/CVE-2025-32463"
+    ],
+    "wazuh_vulnerability": {
+      "_index": "wazuh-states-vulnerabilities-wazuh",
+      "_id": "001_sample_CVE-2025-32463_1",
+      "agent": {
+        "id": "001",
+        "name": "target1",
+        "type": "Wazuh",
+        "version": "v4.14.5"
+      },
+      "host": {
+        "os": {
+          "full": "Ubuntu 24.04.4 LTS (Noble Numbat)",
+          "kernel": "6.8.0-106-generic",
+          "name": "Ubuntu",
+          "platform": "ubuntu",
+          "type": "ubuntu",
+          "version": "24.04.4"
+        }
+      },
+      "package": {
+        "architecture": "amd64",
+        "description": "Provide limited super user privileges to specific users",
+        "name": "sudo",
+        "size": 1111111,
+        "type": "deb",
+        "version": "1.9.15p5-3ubuntu5"
+      },
+      "vulnerability": {
+        "category": "Packages",
+        "classification": "-",
+        "description": "Sudo chroot option local privilege escalation.",
+        "detected_at": "2026-04-30T20:00:00+03:00",
+        "enumeration": "CVE",
+        "id": "CVE-2025-32463",
+        "published_at": "2025-06-30T10:00:00Z",
+        "reference": "https://ubuntu.com/security/CVE-2025-32463, https://www.cve.org/CVERecord?id=CVE-2025-32463",
+        "scanner": {
+          "condition": "Package less than 1.9.15p5-3ubuntu5.24.04.1",
+          "reference": "https://cti.wazuh.com/vulnerabilities/cves/CVE-2025-32463",
+          "source": "Canonical Security Tracker",
+          "vendor": "Wazuh"
+        },
+        "score": {
+          "base": 9.3,
+          "version": "3.1",
+          "vector": "CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:C/C:H/I:H/A:H"
+        },
+        "severity": "Critical",
+        "under_evaluation": false
+      }
+    }
+  }
+]

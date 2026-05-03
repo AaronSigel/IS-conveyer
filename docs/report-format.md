@@ -12,6 +12,8 @@ Legacy markdown-отчёт с паспортами сохраняется для
 - `raw/wazuh-sca.json`
 - `raw/wazuh-vulnerabilities.json`
 
+CLI `scripts/scan-and-report.sh --output-prefix <prefix>` создаёт новый каталог запуска в `artifacts/runs/<run_id>/` и оставляет prefixed копии в `artifacts/` для совместимости со старыми командами.
+
 ## Структура `normalized_report.json`
 
 ```text
@@ -29,6 +31,8 @@ raw_refs
 
 `findings` содержит основные активные findings после фильтрации, дедупликации и исключения `pass`/`under_evaluation`. `under_evaluation` хранится отдельно и не попадает в remediation plan. `raw_refs` нужен для трассировки, но не печатается в PDF.
 
+`priority` является внутренним приоритетом P1-P4 и дополняется полями `priority_score` и `priority_reason`. Remediation plan сортируется по `priority_score`, а не только по Wazuh severity.
+
 ## Структура HTML/PDF
 
 Технический HTML/PDF строится из `reporting/templates/technical_report.html` и содержит:
@@ -41,10 +45,18 @@ raw_refs
 6. Software vulnerability groups
 7. Verification checklist
 8. Exceptions and under evaluation
-9. Detailed finding cards
+9. Ограниченный набор паспортных finding cards в `summary` или полный набор в `full`
 10. Raw artifacts note
 
 Таблица remediation plan содержит только короткие поля: priority, group, severity, assets, findings и summary. Полные commands, verification и rollback выводятся в карточках remediation-групп. Полный JSON и raw Wazuh snapshots должны скачиваться отдельными файлами, а не вставляться в PDF.
+
+`summary` является режимом по умолчанию и не печатает весь список detailed finding cards. `full` может включать все карточки и длинные evidence/remediation/compliance поля.
+
+```bash
+python scripts/generate-report.py --mode summary
+python scripts/generate-report.py --mode full
+python scripts/generate-report.py --mode legacy
+```
 
 ## Asset inventory
 
