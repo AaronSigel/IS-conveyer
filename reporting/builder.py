@@ -123,22 +123,25 @@ def _summary_verification_checklist(groups: list[dict[str, Any]]) -> list[dict[s
                 "steps": [
                     {"command": "apt list --upgradable", "expected_result": "затронутые пакеты отсутствуют в списке доступных обновлений"},
                     {"command": "dpkg-query -W <package>", "expected_result": "установленная версия соответствует исправленной версии или актуальному security update"},
-                    {"command": "repeat Wazuh vulnerability scan", "expected_result": "повторное сканирование Wazuh Vulnerability Detection не выявляет устраненные CVE", "manual": True},
+                    {"command": "повторить сканирование Wazuh Vulnerability Detection", "expected_result": "повторное сканирование Wazuh не выявляет указанную CVE или группу CVE", "manual": True},
                 ],
             }
         )
 
     templates = {
-        "ssh": ("Проверка SSH", ["sshd -T", "systemctl status ssh"]),
-        "pam": ("Проверка PAM", ["grep -R \"pam_faillock\\|pam_pwquality\\|pam_pwhistory\" /etc/pam.d /etc/security || true"]),
-        "apparmor": ("Проверка AppArmor", ["systemctl is-active apparmor", "apparmor_status"]),
-        "auditd": ("Проверка auditd", ["systemctl is-active auditd", "auditctl -s", "augenrules --check"]),
-        "firewall": ("Проверка межсетевого экранирования", ["systemctl is-active <selected-firewall-backend>", "nft list ruleset || ufw status verbose || iptables -L -n -v"]),
-        "cron_at": ("Проверка cron/at", ["stat -c '%a %U %G %n' /etc/cron.allow /etc/at.allow 2>/dev/null || true"]),
-        "bootloader": ("Проверка GRUB bootloader", ["grep -R \"password_pbkdf2\" /boot/grub/grub.cfg /etc/grub.d /etc/default/grub 2>/dev/null || true"]),
-        "aide": ("Проверка AIDE", ["dpkg -s aide aide-common", "systemctl is-enabled dailyaidecheck.timer"]),
-        "time_sync": ("Проверка синхронизации времени", ["systemctl is-active chrony", "chronyc tracking"]),
-        "insecure_services": ("Проверка legacy clients/services", ["dpkg -l | grep -E '^(ii|hi)\\s+(telnet|rsh-client|nis|talk|ftp|tnftp|rsync)\\b' || true"]),
+        "ssh": ("Проверка SSH", [("sshd -T", "в выводе sshd -T присутствуют безопасные значения параметров профиля"), ("systemctl status ssh", "служба SSH активна или перечитана после проверки синтаксиса")]),
+        "pam": ("Проверка PAM", [("grep -R \"pam_faillock\\|pam_pwquality\\|pam_pwhistory\" /etc/pam.d /etc/security || true", "в конфигурации присутствуют pam_faillock, pam_pwquality и pam_pwhistory с требуемыми параметрами")]),
+        "apparmor": ("Проверка AppArmor", [("systemctl is-active apparmor", "служба активна"), ("apparmor_status", "профили загружены и применяются в enforce-режиме")]),
+        "auditd": ("Проверка auditd", [("systemctl is-active auditd", "служба auditd активна"), ("auditctl -s", "правила аудита загружены"), ("augenrules --check", "augenrules не сообщает об ошибках")]),
+        "audit_locale_network": ("Проверка auditd", [("augenrules --check", "augenrules не сообщает об ошибках"), ("auditctl -l", "правила аудита изменений локали и сети загружены")]),
+        "firewall": ("Проверка межсетевого экранирования", [("systemctl is-active <selected-firewall-backend>", "выбранный backend межсетевого экранирования активен"), ("nft list ruleset || ufw status verbose || iptables -L -n -v", "правила соответствуют утвержденной политике хоста")]),
+        "cron_at": ("Проверка cron/at", [("stat -c '%a %U %G %n' /etc/cron.allow /etc/at.allow 2>/dev/null || true", "allow/deny-файлы имеют безопасные права и владельцев")]),
+        "bootloader": ("Проверка GRUB bootloader", [("grep -R \"password_pbkdf2\" /boot/grub/grub.cfg /etc/grub.d /etc/default/grub 2>/dev/null || true", "в конфигурации GRUB присутствует password_pbkdf2 или утвержденное исключение")]),
+        "aide": ("Проверка AIDE", [("dpkg -s aide aide-common", "AIDE установлен"), ("systemctl is-enabled dailyaidecheck.timer", "периодическая проверка целостности включена")]),
+        "time_sync": ("Проверка синхронизации времени", [("systemctl is-active chrony", "служба синхронизации времени активна"), ("chronyc tracking", "система синхронизирована с доверенным источником")]),
+        "insecure_services": ("Проверка legacy clients/services", [("dpkg -l | grep -E '^(ii|hi)\\s+(telnet|rsh-client|nis|talk|ftp|tnftp|rsync)\\b' || true", "пакеты telnet, rsh-client, nis, talk, ftp, tnftp, rsync отсутствуют или имеют утвержденное исключение")]),
+        "kernel_modules": ("Проверка модулей ядра", [("lsmod", "ненужные модули ядра не загружены"), ("modprobe -n -v <module>", "модуль запрещен через modprobe configuration или не загружается")]),
+        "login_banners": ("Проверка баннеров входа", [("cat /etc/issue /etc/issue.net", "баннеры соответствуют утвержденному тексту и не раскрывают сведения о системе")]),
     }
     seen: set[str] = set()
     for group in groups:
@@ -147,13 +150,13 @@ def _summary_verification_checklist(groups: list[dict[str, Any]]) -> list[dict[s
         if base_key in seen or base_key not in templates:
             continue
         seen.add(base_key)
-        title, commands = templates[base_key]
+        title, steps = templates[base_key]
         checklist.append(
             {
                 "title": title,
                 "steps": [
-                    {"command": command, "expected_result": "результат команды соответствует ожидаемому безопасному состоянию"}
-                    for command in commands
+                    {"command": command, "expected_result": expected_result}
+                    for command, expected_result in steps
                 ],
             }
         )

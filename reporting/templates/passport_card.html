@@ -1,4 +1,9 @@
 <article class="card passport-card">
+  {% set description_human = passport.description_human|default("", true) %}
+  {% set impact_human = passport.impact_human|default("", true) %}
+  {% set remediation_human = passport.remediation_human|default("", true) %}
+  {% set expected_human = passport.expected_state_human|default("", true) %}
+  {% set verification_steps = passport.verification_human|default(passport.verification_steps, true) %}
   <h3>{{ passport.title_ru }}</h3>
   <p class="meta">{{ passport.priority }} · {{ passport.severity }} · {{ passport.vulnerability_class }} · полнота обязательных полей {{ passport.mandatory_completeness|default(passport.completeness_score) }}</p>
   <table class="kv-table">
@@ -10,17 +15,22 @@
       <tr><th>Место проявления</th><td>{{ passport.location }}</td></tr>
       <tr><th>Способ обнаружения</th><td>{{ passport.detection_method }}</td></tr>
       <tr><th>Фактическое состояние</th><td>{{ passport.actual_state }}</td></tr>
-      <tr><th>Ожидаемое состояние</th><td>{{ passport.expected_state_human|default(passport.expected_state) }}</td></tr>
-      <tr><th>Описание</th><td>{{ passport.description_short|default(passport.description) }}{% if not registry_mode|default(false) and passport.description_full and passport.description_full != passport.description_short %}<br><span class="muted">Полное описание доступно в passport_registry.html.</span>{% endif %}</td></tr>
-      <tr><th>Возможные последствия</th><td>{{ passport.consequences }}</td></tr>
-      <tr><th>Меры устранения</th><td>{{ passport.remediation_summary }}</td></tr>
-      <tr><th>Проверка устранения</th><td>{% for step in passport.verification_steps[:3] %}<code>{{ step.command }}</code><br><span class="muted">{{ step.expected_result }}</span>{% if not loop.last %}<br>{% endif %}{% endfor %}</td></tr>
+      <tr><th>Ожидаемое состояние</th><td>{{ expected_human or "Ожидаемое состояние не сформировано автоматически; полные исходные сведения доступны в паспортном реестре." }}</td></tr>
+      <tr><th>Описание</th><td>{{ description_human or "Описание не сформировано автоматически; полные исходные сведения доступны в паспортном реестре." }}</td></tr>
+      <tr><th>Возможные последствия</th><td>{{ impact_human or "Возможные последствия не сформированы автоматически; полные исходные сведения доступны в паспортном реестре." }}</td></tr>
+      <tr><th>Меры устранения</th><td>{{ remediation_human or "Меры устранения не сформированы автоматически; полные исходные сведения доступны в паспортном реестре." }}</td></tr>
+      <tr><th>Проверка устранения</th><td>{% for step in verification_steps[:3] %}<code>{{ step.command }}</code><br><span class="muted">{{ step.expected_result }}</span>{% if not loop.last %}<br>{% endif %}{% else %}Проверка не сформирована автоматически; полные исходные сведения доступны в паспортном реестре.{% endfor %}</td></tr>
       <tr><th>Статус полноты</th><td>{{ passport.completeness_note|default("обязательные поля заполнены") }} / {{ passport.mandatory_completeness|default(passport.completeness_score) }}{% if passport.extended_completeness is defined %}<br><span class="muted">Полнота расширенных полей: {{ passport.extended_completeness }}</span>{% endif %}</td></tr>
       {% if registry_mode|default(false) %}
+      <tr><th>Raw description</th><td>{{ passport.description_raw|default(passport.description_full)|default("не установлено по данным источника") }}</td></tr>
+      <tr><th>Raw impact</th><td>{{ passport.impact_raw|default("не установлено по данным источника") }}</td></tr>
+      <tr><th>Raw remediation</th><td>{{ passport.remediation_raw|default("не установлено по данным источника") }}</td></tr>
       <tr><th>Raw expected state</th><td>{{ passport.expected_state_raw|default("не установлено по данным источника") }}</td></tr>
+      <tr><th>Raw verification</th><td>{{ passport.verification_raw|default([]) }}</td></tr>
       <tr><th>Условия / команды источника</th><td>{{ passport.conditions }}</td></tr>
-      <tr><th>Полное описание</th><td>{{ passport.description_full|default(passport.description) }}</td></tr>
       <tr><th>References</th><td>{{ passport.references }}</td></tr>
+      <tr><th>Source references</th><td>{{ passport.source_references|default([]) }}</td></tr>
+      <tr><th>Raw refs</th><td>{{ passport.raw_refs|default([]) }}</td></tr>
       <tr><th>Linked checks</th><td>{{ passport.linked_checks }}</td></tr>
       {% endif %}
     </tbody>

@@ -5,11 +5,11 @@ package_update:
   verification:
     - "apt list --upgradable"
     - "dpkg -l | grep -E '{package_pattern}'"
-    - "repeat Wazuh vulnerability scan"
+    - "повторить сканирование Wazuh Vulnerability Detection"
   rollback: "Use package manager history or restore from snapshot if update causes regression"
 aide:
   title: "Configure AIDE integrity monitoring"
-  summary: "Install AIDE, initialize the database, and enable scheduled integrity checks"
+  summary: "Установить AIDE, инициализировать базу контроля целостности и включить периодическую проверку"
   commands:
     - "sudo apt update"
     - "sudo apt install aide aide-common"
@@ -79,7 +79,7 @@ bootloader:
   rollback: "Restore previous GRUB configuration and regenerate grub.cfg if required"
 ssh:
   title: "Harden sshd_config"
-  summary: "Apply SSH daemon hardening in /etc/ssh/sshd_config.d and reload sshd after syntax validation"
+  summary: "Применить параметры усиления SSH, проверить синтаксис конфигурации и перечитать службу"
   commands:
     - "sudo sshd -t"
     - "sudo systemctl reload ssh"
@@ -89,7 +89,7 @@ ssh:
   rollback: "Remove or restore the changed sshd_config.d drop-in and reload ssh"
 pam:
   title: "Configure PAM password and lockout policy"
-  summary: "Apply password quality, password history, and account lockout policy through PAM configuration"
+  summary: "Настроить требования к сложности пароля, истории паролей и блокировке после неуспешных попыток входа через PAM"
   commands:
     - "sudo pam-auth-update --enable faillock"
   verification:

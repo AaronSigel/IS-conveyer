@@ -90,7 +90,7 @@ table {
 
 th, td {
   border: 1px solid #d8dee8;
-  overflow-wrap: anywhere;
+  overflow-wrap: normal;
   padding: 6px 8px;
   text-align: left;
   vertical-align: top;
@@ -101,6 +101,11 @@ th {
   background: #eef2f6;
   color: #263241;
   font-weight: 700;
+  hyphens: none;
+}
+
+td {
+  overflow-wrap: break-word;
 }
 
 .kv-table th {
@@ -201,9 +206,16 @@ code {
   color: #182230;
   font-family: "Cascadia Mono", Consolas, monospace;
   font-size: 10.5px;
+  overflow-wrap: anywhere;
   padding: 1px 4px;
   white-space: pre-wrap;
-  word-break: break-word;
+  word-break: normal;
+}
+
+.asset-table td:nth-child(1),
+.asset-table td:nth-child(3),
+.asset-table td:nth-child(4) {
+  overflow-wrap: anywhere;
 }
 
 .long-text {

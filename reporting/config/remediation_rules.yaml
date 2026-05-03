@@ -7,14 +7,14 @@ rules:
       finding_types: [software_vulnerability]
     subsystem: software
     priority_hint: P2
-    summary: Update affected packages to fixed versions or latest security updates from the approved repository
+    summary: Обновить затронутые пакеты до исправленных версий или актуальных обновлений безопасности из утвержденного репозитория
     commands:
       - "sudo apt update"
       - "sudo apt install --only-upgrade {packages}"
     verification:
       - "apt list --upgradable"
       - "dpkg -l | grep -E '{package_pattern}'"
-      - "repeat Wazuh vulnerability scan"
+      - "повторить сканирование Wazuh Vulnerability Detection"
     rollback: Use package manager history or restore from snapshot if update causes regression
 
   - id: aide
@@ -24,7 +24,7 @@ rules:
       title_patterns: ["AIDE", "integrity"]
     subsystem: integrity_monitoring
     priority_hint: P2
-    summary: Install AIDE, initialize the database, and enable scheduled integrity checks
+    summary: Установить AIDE, инициализировать базу контроля целостности и включить периодическую проверку
     commands:
       - "sudo apt update"
       - "sudo apt install aide aide-common"
@@ -64,7 +64,7 @@ rules:
       title_patterns: ["PAM", "password", "faillock"]
     subsystem: access_control
     priority_hint: P2
-    summary: Apply password quality, history, and account lockout policy through PAM configuration
+    summary: Настроить требования к сложности пароля, истории паролей и блокировке после неуспешных попыток входа через PAM
     commands:
       - "sudo pam-auth-update --enable faillock"
     verification:
@@ -166,7 +166,7 @@ rules:
       title_patterns: ["SSH", "sshd_config"]
     subsystem: access_control
     priority_hint: P1
-    summary: Apply SSH daemon hardening in sshd_config.d and reload sshd after syntax validation
+    summary: Применить параметры усиления SSH, проверить синтаксис конфигурации и перечитать службу
     commands:
       - "sudo sshd -t"
       - "sudo systemctl reload ssh"

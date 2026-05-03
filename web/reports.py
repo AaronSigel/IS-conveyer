@@ -77,6 +77,7 @@ def split_report_specs(base_filters: dict[str, Any], hosts: list[str]) -> dict[s
         packages["finding_type"] = {"op": "eq", "value": "software_vulnerability"}
         specs[f"{safe_host}-configuration"] = {
             "title": f"{host} - Configuration report",
+            "host": host,
             "html": f"{safe_host}-configuration-report.html",
             "pdf": f"{safe_host}-configuration-report.pdf",
             "json": f"{safe_host}-configuration-normalized_report.json",
@@ -84,6 +85,7 @@ def split_report_specs(base_filters: dict[str, Any], hosts: list[str]) -> dict[s
         }
         specs[f"{safe_host}-packages"] = {
             "title": f"{host} - Package vulnerability report",
+            "host": host,
             "html": f"{safe_host}-packages-report.html",
             "pdf": f"{safe_host}-packages-report.pdf",
             "json": f"{safe_host}-packages-normalized_report.json",
@@ -139,6 +141,7 @@ def create_export(
         reports = {}
         total_after_filter = 0
         combined_summary = runs.empty_summary()
+        combined_assets_by_host: dict[str, list[dict[str, Any]]] = {}
         hosts = [str(host) for host in metadata.get("hosts") or []]
         if not hosts:
             hosts = sorted({str(item.get("host")) for item in source_findings if item.get("host")})
@@ -152,6 +155,21 @@ def create_export(
                 profile=metadata.get("profile_id"),
                 report_id=report_id,
             )
+            host = str(spec.get("host") or "")
+            if host and host not in combined_assets_by_host:
+                combined_filters = _with_filter(dict(filters), "host", {"op": "eq", "value": host})
+                host_filtered = apply_filters(source_findings, combined_filters)
+                host_report = build_normalized_report_for_export(
+                    source_findings,
+                    filtered_findings=host_filtered,
+                    metadata=metadata,
+                    profile=metadata.get("profile_id"),
+                    report_id=f"{host}-combined",
+                )
+                combined_assets_by_host[host] = host_report.get("assets", [])
+            if host and combined_assets_by_host.get(host):
+                normalized_report["assets"] = combined_assets_by_host[host]
+                normalized_report["scope"] = {"assets": combined_assets_by_host[host]}
             report_export = {
                 "id": report_id,
                 "title": spec["title"],

@@ -377,6 +377,45 @@ def _config_title_ru(action_key: str, title: str) -> str:
     return mapping.get(base_key, title or "Настройка параметров безопасности хоста")
 
 
+def _summary_ru(action_key: str, summary: str, package_name: str | None = None) -> str:
+    base_key = "firewall" if action_key.startswith("firewall:") else action_key
+    if action_key == "package_update":
+        if package_name:
+            return f"Обновить пакет {package_name} до исправленной версии или актуального обновления безопасности"
+        return "Обновить затронутые пакеты до исправленных версий или актуальных обновлений безопасности"
+    mapping = {
+        "aide": "Установить AIDE, инициализировать базу контроля целостности и включить периодическую проверку",
+        "apparmor": "Установить и включить AppArmor, загрузить профили и перевести требуемые профили в enforce-режим",
+        "bootloader": "Настроить пароль GRUB и защитить изменение параметров загрузки",
+        "core_dumps": "Отключить или ограничить core dump через systemd-coredump, sysctl и limits configuration",
+        "ssh": "Применить параметры усиления SSH, проверить синтаксис конфигурации и перечитать службу",
+        "pam": "Настроить требования к сложности пароля, истории паролей и блокировке после неуспешных попыток входа через PAM",
+        "time_sync": "Настроить один сервис синхронизации времени и проверить синхронизацию с доверенным источником",
+        "cron_at": "Ограничить доступ к cron и at разрешенными администраторами",
+        "ftp_client": "Удалить FTP-клиенты либо оформить утвержденное исключение",
+        "rsync_service": "Отключить или удалить rsync, если он не требуется роли хоста",
+        "firewall": "Настроить один утвержденный backend межсетевого экранирования хоста",
+        "login_banners": "Настроить утвержденные предупреждающие баннеры входа без раскрытия сведений о системе",
+        "insecure_services": "Удалить устаревшие небезопасные клиенты и сервисы либо оформить утвержденное исключение",
+        "auditd": "Установить и включить auditd, загрузить правила аудита и проверить отсутствие ошибок",
+        "audit_locale_network": "Добавить и загрузить правила auditd для изменений локали, hostname, hosts и сетевой конфигурации",
+        "audit_50_scope": "Добавить и загрузить правила auditd для контроля scope",
+        "audit_50_user_emulation": "Добавить и загрузить правила auditd для user emulation",
+        "audit_50_identity": "Добавить и загрузить правила auditd для изменений идентификационных данных",
+        "audit_99_finalize": "Финализировать правила auditd согласно политике",
+        "tmp_mount_options": "Применить безопасные параметры монтирования для временных файловых систем",
+        "system_partitions": "Настроить изоляцию системных разделов и защиту журналов",
+        "filesystem_mount_options": "Применить безопасные параметры монтирования файловых систем",
+        "kernel_modules": "Запретить загрузку ненужных модулей ядра через modprobe configuration",
+        "logging": "Включить и проверить системное журналирование согласно профилю безопасности",
+    }
+    if base_key in mapping:
+        return mapping[base_key]
+    if summary.startswith("Apply ") and " configuration" in summary:
+        return "Применить требуемые параметры конфигурации согласно профилю безопасности"
+    return summary
+
+
 def _package_commands(findings: list[dict[str, Any]]) -> tuple[list[str], list[dict[str, Any]], str]:
     templates = _templates().get("package_update", {})
     packages = unique_sorted([item.get("package", {}).get("name") for item in findings])
@@ -448,13 +487,16 @@ def build_remediation_groups(findings: list[dict[str, Any]], policy_options: dic
             severity_counts = Counter(vulnerability.get("severity", "info") for vulnerability in vulnerabilities)
             max_cvss = max((float(vulnerability.get("cvss")) for vulnerability in vulnerabilities if vulnerability.get("cvss") not in (None, "", "unknown")), default=None)
             title = f"Update package {package_name} on {asset}"
-            summary = f"Update package {package_name} to a fixed version or latest security update"
+            summary_raw = f"Update package {package_name} to a fixed version or latest security update"
+            summary = _summary_ru("package_update", summary_raw, str(package_name))
             title_ru = f"Обновление пакета {package_name} на {asset}"
             group_id = stable_id("PKG-GRP", agent_id, package_name, package_version, package_arch)
         elif action_type == "config_change":
             sample = items[0]
             action_key = str(key[1])
             title, summary = _config_title_summary(action_key, items)
+            summary_raw = summary
+            summary = _summary_ru(action_key, summary)
             title_ru = _config_title_ru(action_key, title)
             commands = _commands_for_config(action_key, sample)
             verification = _verification_for_config_group(action_key, items)
@@ -463,7 +505,8 @@ def build_remediation_groups(findings: list[dict[str, Any]], policy_options: dic
         else:
             title = "Manual review"
             title_ru = "Ручная проверка"
-            summary = "Review findings manually"
+            summary_raw = "Review findings manually"
+            summary = "Проверить findings вручную"
             commands = []
             verification = [_verification_step("repeat Wazuh scan", expected_result="Manual review finding is resolved", manual=True)]
             rollback = "not provided"
@@ -479,6 +522,7 @@ def build_remediation_groups(findings: list[dict[str, Any]], policy_options: dic
             "affected_assets": affected_assets,
             "affected_findings": [item["finding_uid"] for item in items],
             "summary": summary,
+            "summary_raw": summary_raw,
             "commands": commands,
             "verification": verification,
             "rollback": rollback,
