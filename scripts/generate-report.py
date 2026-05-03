@@ -7,18 +7,22 @@ import sys
 from collections import Counter
 from datetime import datetime
 
-import yaml
-from jinja2 import Environment, FileSystemLoader
-
-
 PROJECT_ROOT = pathlib.Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from reporting import build_normalized_report
-from reporting.renderers import render_html as render_technical_html
-from reporting.renderers import render_json as render_technical_json
-from reporting.renderers import render_pdf as render_technical_pdf
+from reporting import filters as reporting_filters
+from reporting.passports import build_passports as service_build_passports
+from reporting.passports import build_profile_index as service_build_profile_index
+from reporting.profile import load_findings, load_metadata
+from reporting.profile import load_enrichment as service_load_enrichment
+from reporting.profile import load_profile as service_load_profile
+from reporting.renderers.legacy_markdown import render_report as render_legacy_report
+from reporting.services import report_generation
+from reporting.services.report_export import (
+    build_normalized_report_for_export,
+)
 
 DEFAULT_FINDINGS = PROJECT_ROOT / "artifacts" / "unified-findings.json"
 DEFAULT_OUTPUT = PROJECT_ROOT / "artifacts" / "draft-report.md"
@@ -74,47 +78,6 @@ def parse_args():
     if args.legacy:
         args.mode = "legacy"
     return args
-
-
-def load_findings(path):
-    path = pathlib.Path(path)
-    if not path.exists():
-        raise FileNotFoundError(f"Findings file not found: {path}")
-    data = json.loads(path.read_text(encoding="utf-8"))
-    if not isinstance(data, list):
-        raise ValueError("Findings file must contain a JSON array")
-    return data
-
-
-def load_yaml_file(path):
-    if not path:
-        return {}
-    path = pathlib.Path(path)
-    if not path.exists():
-        return {}
-    return yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-
-
-def load_profile(path):
-    return load_yaml_file(path)
-
-
-def load_metadata(path):
-    metadata = load_yaml_file(path)
-    metadata.setdefault("report", {})
-    metadata.setdefault("assessment", {})
-    metadata.setdefault("stand", {})
-    metadata.setdefault("tools", [])
-    return metadata
-
-
-def load_enrichment(path):
-    path = pathlib.Path(path)
-    if not path.exists():
-        return {}
-    if path.suffix.lower() == ".json":
-        return json.loads(path.read_text(encoding="utf-8"))
-    return load_yaml_file(path)
 
 
 def split_values(raw):
@@ -229,14 +192,7 @@ def list_match(actual, expected_values, *, normalizer=None, source=False):
 
 
 def get_cvss_score(finding):
-    cvss = finding.get("cvss")
-    if isinstance(cvss, dict) and cvss.get("base_score") is not None:
-        return float(cvss["base_score"])
-    for item in finding.get("evidence") or []:
-        match = re.search(r"CVSS\s+base:\s*([0-9]+(?:\.[0-9]+)?)", str(item), re.IGNORECASE)
-        if match:
-            return float(match.group(1))
-    return None
+    return reporting_filters.get_cvss_base_score(finding)
 
 
 def severity_from_cvss(score):
@@ -263,45 +219,12 @@ def normalized_severity(finding):
 
 
 def infer_finding_type(finding):
-    explicit = finding.get("finding_type")
-    if explicit:
-        return explicit
-    source = str(finding.get("source", "")).lower()
-    category = str(finding.get("category", "")).lower()
-    if "vulnerab" in source or category == "vulnerability":
-        return "software_vulnerability"
-    if category == "software":
-        return "insecure_package"
-    return "configuration_noncompliance"
+    return reporting_filters.infer_finding_type(finding)
 
 
 def apply_filters(findings, filters):
-    selected = []
-    for finding in findings:
-        if filters.get("status") and not list_match(finding.get("status"), filters["status"], normalizer=normalize_status):
-            continue
-        if filters.get("severity") and not list_match(normalized_severity(finding), filters["severity"]):
-            continue
-        if filters.get("category") and not list_match(finding.get("category"), filters["category"]):
-            continue
-        if filters.get("source") and not list_match(finding.get("source"), filters["source"], source=True):
-            continue
-        if filters.get("host") and not list_match(finding.get("host"), filters["host"]):
-            continue
-        if filters.get("rule_id") and not list_match(finding.get("rule_id"), filters["rule_id"]):
-            continue
-        if filters.get("finding_type") and not list_match(infer_finding_type(finding), filters["finding_type"]):
-            continue
-        if "cvss_min" in filters or "cvss_max" in filters:
-            score = get_cvss_score(finding)
-            if score is None:
-                continue
-            if "cvss_min" in filters and score < filters["cvss_min"]:
-                continue
-            if "cvss_max" in filters and score > filters["cvss_max"]:
-                continue
-        selected.append(finding)
-    return selected
+    specs = reporting_filters.legacy_cli_filters_to_specs(filters)
+    return reporting_filters.apply_filters(findings, specs)
 
 
 def build_summary(selected_findings):
@@ -822,26 +745,6 @@ def build_passport(finding, index, profile_index, metadata, report_datetime):
     return passport
 
 
-def jinja_env():
-    env = Environment(
-        loader=FileSystemLoader(str(TEMPLATES_DIR)),
-        trim_blocks=True,
-        lstrip_blocks=True,
-        autoescape=False,
-    )
-    env.filters["md"] = markdown_cell
-    return env
-
-
-def markdown_cell(value):
-    text = str(value if value is not None else "")
-    return text.replace("|", "\\|").replace("\n", "<br>")
-
-
-def render_passport(passport, section_number):
-    return jinja_env().get_template(PASSPORT_TEMPLATE).render(passport=passport, section_number=section_number).strip()
-
-
 def conclusion(summary):
     if summary["selected_findings_count"] == 0:
         return "По заданным критериям фильтрации уязвимости и несоответствия не выявлены."
@@ -905,15 +808,13 @@ def build_context(args, findings, selected_findings, filters, metadata, profile,
 
 
 def render_report(context, output_path):
-    rendered_passports = []
-    for index, passport in enumerate(context["passports"], start=1):
-        rendered_passports.append(render_passport(passport, f"5.{index}"))
-    context = dict(context)
-    context["rendered_passports"] = rendered_passports
-    report = jinja_env().get_template(TECHNICAL_TEMPLATE).render(**context)
-    output_path = pathlib.Path(output_path)
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    output_path.write_text(report.rstrip() + "\n", encoding="utf-8")
+    render_legacy_report(
+        context,
+        output_path=output_path,
+        templates_dir=TEMPLATES_DIR,
+        report_template=TECHNICAL_TEMPLATE,
+        passport_template=PASSPORT_TEMPLATE,
+    )
 
 
 def safe_filename_part(value):
@@ -938,17 +839,7 @@ def split_report_hosts(selected_findings, metadata, filters):
 
 
 def metadata_for_host(metadata, host):
-    narrowed = dict(metadata)
-    stand = dict(metadata.get("stand", {}) or {})
-    hosts = stand.get("hosts", []) or []
-    if hosts:
-        stand["hosts"] = [
-            item
-            for item in hosts
-            if str(item.get("name", "")).lower() == str(host).lower()
-        ]
-    narrowed["stand"] = stand
-    return narrowed
+    return report_generation.metadata_for_host(metadata, host)
 
 
 def split_kind_findings(findings, host, kind):
@@ -974,7 +865,7 @@ def render_split_reports(args, findings, selected_findings, filters, metadata, p
             split_filters = dict(filters)
             split_filters["host"] = [host]
             split_filters["finding_type"] = [finding_type]
-            passports = build_passports(split_findings, profile_index, metadata, report_datetime)
+            passports = service_build_passports(split_findings, profile_index, metadata, report_datetime)
             context = build_context(
                 args,
                 findings,
@@ -992,22 +883,11 @@ def render_split_reports(args, findings, selected_findings, filters, metadata, p
 
 
 def technical_output_paths(args):
-    output_dir = pathlib.Path(args.output).parent if args.output else DEFAULT_OUTPUT.parent
-    return (
-        pathlib.Path(args.normalized_output) if args.normalized_output else output_dir / "normalized_report.json",
-        pathlib.Path(args.html_output) if args.html_output else output_dir / "technical_report.html",
-        pathlib.Path(args.pdf_output) if args.pdf_output else output_dir / "technical_report.pdf",
-    )
+    return report_generation.technical_output_paths(args, DEFAULT_OUTPUT.parent)
 
 
 def render_technical_outputs(report, json_path, html_path, pdf_path, skip_pdf=False):
-    render_technical_json(report, json_path)
-    render_technical_html(report, html_path)
-    if not skip_pdf:
-        try:
-            render_technical_pdf(html_path, pdf_path)
-        except Exception as exc:
-            print(f"PDF rendering skipped: {exc}", file=sys.stderr)
+    report_generation.render_technical_outputs(report, json_path, html_path, pdf_path, skip_pdf)
 
 
 def split_technical_findings(selected_findings, host, kind):
@@ -1018,35 +898,21 @@ def split_technical_findings(selected_findings, host, kind):
 
 
 def render_technical_split_reports(args, findings, selected_findings, metadata, profile_name, report_datetime):
-    if not args.split_output_dir:
-        return []
-    output_dir = pathlib.Path(args.split_output_dir)
-    output_dir.mkdir(parents=True, exist_ok=True)
-    written = []
-    for host in split_report_hosts(selected_findings, metadata, {}):
-        for kind, finding_type in (("configuration", "configuration_noncompliance"), ("packages", "software_vulnerability")):
-            split_findings = split_technical_findings(selected_findings, host, kind)
-            split_report = build_normalized_report(
-                findings,
-                filtered_findings=split_findings,
-                metadata=metadata_for_host(metadata, host),
-                policy_options=metadata.get("policy_options"),
-                profile=profile_name,
-                report_id=f"{host}-{kind}",
-                generated_at=report_datetime,
-            )
-            base = output_dir / f"{safe_filename_part(host)}-{kind}-report"
-            render_technical_outputs(split_report, base.with_suffix(".json"), base.with_suffix(".html"), base.with_suffix(".pdf"), args.skip_pdf)
-            written.extend([base.with_suffix(".json"), base.with_suffix(".html")])
-            if not args.skip_pdf and base.with_suffix(".pdf").exists():
-                written.append(base.with_suffix(".pdf"))
-    return written
+    return report_generation.render_technical_split_reports(
+        args,
+        findings,
+        selected_findings,
+        metadata,
+        profile_name,
+        report_datetime,
+        infer_finding_type,
+    )
 
 
 def legacy_main(args, findings, profile, metadata, enrichment, filters, report_datetime):
     selected_findings = apply_filters(findings, filters)
-    profile_index = build_profile_index(profile, enrichment)
-    passports = build_passports(selected_findings, profile_index, metadata, report_datetime)
+    profile_index = service_build_profile_index(profile, enrichment)
+    passports = service_build_passports(selected_findings, profile_index, metadata, report_datetime)
     context = build_context(args, findings, selected_findings, filters, metadata, profile, passports, report_datetime)
     render_report(context, args.output)
     split_reports = render_split_reports(
@@ -1068,9 +934,9 @@ def legacy_main(args, findings, profile, metadata, enrichment, filters, report_d
 def main():
     args = parse_args()
     findings = load_findings(args.findings)
-    profile = load_profile(args.profile)
+    profile = service_load_profile(args.profile)
     metadata = load_metadata(args.metadata)
-    enrichment = load_enrichment(args.enrichment)
+    enrichment = service_load_enrichment(args.enrichment)
     filters = build_filters(args)
     report_datetime = datetime.now().astimezone()
     if args.mode == "legacy":
@@ -1081,19 +947,19 @@ def main():
     profile_name = pathlib.Path(args.profile).stem if args.profile else "unknown"
     policy_options = profile.get("policy_options") if isinstance(profile.get("policy_options"), dict) else {}
     metadata.setdefault("policy_options", policy_options)
-    report = build_normalized_report(
+    report = build_normalized_report_for_export(
         findings,
         filtered_findings=selected_findings,
         metadata=metadata,
-        policy_options=policy_options,
         profile=profile_name,
+        report_id="default",
         generated_at=report_datetime,
     )
     json_path, html_path, pdf_path = technical_output_paths(args)
     render_technical_outputs(report, json_path, html_path, pdf_path, args.skip_pdf)
     split_reports = render_technical_split_reports(args, findings, selected_findings, metadata, profile_name, report_datetime)
-    profile_index = build_profile_index(profile, enrichment)
-    passports = build_passports(selected_findings, profile_index, metadata, report_datetime)
+    profile_index = service_build_profile_index(profile, enrichment)
+    passports = service_build_passports(selected_findings, profile_index, metadata, report_datetime)
     legacy_context = build_context(args, findings, selected_findings, filters, metadata, profile, passports, report_datetime)
     render_report(legacy_context, args.output)
     print(f"Normalized report written to {json_path}")

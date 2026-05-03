@@ -275,7 +275,7 @@ python scripts/generate-report.py \
 - `--cvss-min`
 - `--cvss-max`
 
-Подробности формата отчёта и mapping `finding -> passport` описаны в [docs/report-format.md](/home/funder/IS-project/docs/report-format.md).
+Подробности формата отчёта, роли шаблонов (`reporting/templates/*` как основной контур и `report/templates/*` как legacy compatibility), а также mapping `finding -> passport` описаны в [docs/report-format.md](docs/report-format.md).
 
 ## Web UI
 
@@ -301,6 +301,19 @@ python scripts/generate-report.py \
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\windows\run-ui.ps1
 ```
+
+## Unified Python CLI
+
+Основной Python CLI-контракт:
+
+```bash
+python -m is_conveyer export -- --hosts target1,target2
+python -m is_conveyer report -- --findings artifacts/unified-findings.json --output artifacts/draft-report.md
+python -m is_conveyer scan-and-report -- --hosts target1,target2
+python -m is_conveyer run-ui --host 127.0.0.1 --port 8080 --reload
+```
+
+Старые `scripts/*.sh`, `scripts/windows/*.ps1`, `scripts/windows/*.cmd` сохранены как совместимые entrypoint-обёртки.
 
 Дополнительные аргументы передаются в `uvicorn` (например `--port 8090`).
 

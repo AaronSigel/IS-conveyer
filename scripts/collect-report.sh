@@ -81,7 +81,7 @@ fi
 
 cd "${PROJECT_ROOT}"
 
-python3 scripts/export-findings.py \
+python3 -m is_conveyer export -- \
   --hosts "${HOSTS}" \
   --output "${UNIFIED_PATH}" \
   --raw-alerts-output "${RAW_ALERTS_PATH}" \
@@ -104,7 +104,7 @@ if [[ -n "${SPLIT_REPORTS_DIR}" ]]; then
   generate_args+=(--split-output-dir "${SPLIT_REPORTS_DIR}")
 fi
 
-python3 scripts/generate-report.py "${generate_args[@]}"
+python3 -m is_conveyer report -- "${generate_args[@]}"
 
 echo "unified findings: ${UNIFIED_PATH}"
 echo "raw alerts: ${RAW_ALERTS_PATH}"

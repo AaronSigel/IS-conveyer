@@ -13,7 +13,4 @@ pip install -r requirements-ui.txt
 
 python -m playwright install chromium
 
-uvicorn web.app:app \
-  --host 127.0.0.1 \
-  --port 8080 \
-  --reload
+python -m is_conveyer run-ui --host 127.0.0.1 --port 8080 --reload

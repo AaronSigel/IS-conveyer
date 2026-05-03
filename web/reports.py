@@ -1,13 +1,20 @@
 import re
-import importlib.util
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from reporting import build_normalized_report
 from reporting.renderers import render_pdf as render_technical_pdf
 from reporting.renderers import render_json as render_technical_json
 from reporting.renderers.html_renderer import render_html_string as render_technical_html_string
+from reporting.services.report_export import (
+    DEFAULT_ENRICHMENT,
+    DEFAULT_PROFILE,
+    build_normalized_report_for_export,
+    build_passports,
+    build_profile_index,
+    load_enrichment,
+    load_profile,
+)
 
 try:
     from fastapi.templating import Jinja2Templates
@@ -26,15 +33,6 @@ from web.filters import apply_filters, normalize_findings
 
 
 templates = Jinja2Templates(directory=str(Path(__file__).resolve().parent / "templates"))
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
-
-
-def report_generator_module():
-    spec = importlib.util.spec_from_file_location("generate_report", PROJECT_ROOT / "scripts" / "generate-report.py")
-    module = importlib.util.module_from_spec(spec)
-    assert spec and spec.loader
-    spec.loader.exec_module(module)
-    return module
 
 
 def slugify(value: str) -> str:
@@ -147,7 +145,7 @@ def create_export(
         for report_id, spec in split_report_specs(filters, hosts).items():
             report_filters = spec["filters"]
             filtered = apply_filters(source_findings, report_filters)
-            normalized_report = build_normalized_report(
+            normalized_report = build_normalized_report_for_export(
                 source_findings,
                 filtered_findings=filtered,
                 metadata=metadata,
@@ -210,7 +208,7 @@ def create_export(
         return export
 
     filtered = apply_filters(source_findings, filters)
-    normalized_report = build_normalized_report(
+    normalized_report = build_normalized_report_for_export(
         source_findings,
         filtered_findings=filtered,
         metadata=metadata,
@@ -253,11 +251,10 @@ def render_report_html(
     all_findings: list[dict[str, Any]],
     filtered_findings: list[dict[str, Any]],
 ) -> str:
-    generator = report_generator_module()
-    profile = generator.load_profile(generator.DEFAULT_PROFILE)
-    enrichment = generator.load_enrichment(generator.DEFAULT_ENRICHMENT)
-    profile_index = generator.build_profile_index(profile, enrichment)
-    passports = generator.build_passports(filtered_findings, profile_index, metadata, datetime.now().astimezone())
+    profile = load_profile(DEFAULT_PROFILE)
+    enrichment = load_enrichment(DEFAULT_ENRICHMENT)
+    profile_index = build_profile_index(profile, enrichment)
+    passports = build_passports(filtered_findings, profile_index, metadata, datetime.now().astimezone())
     template = templates.get_template("report_print.html")
     return template.render(
         request=None,

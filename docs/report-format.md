@@ -71,3 +71,10 @@ raw_refs
 ## Legacy markdown
 
 Legacy markdown-режим формирует разделы 0-6 и паспорта findings в стиле старого технического отчёта. Он не является источником истины для MVP HTML/PDF и не должен использоваться для описания структуры `normalized_report.json`.
+
+## Template roles
+
+- `reporting/templates/*` — основной MVP pipeline для technical HTML/PDF, который строится из `normalized_report.json`.
+- `report/templates/*` — legacy markdown compatibility для режима `scripts/generate-report.py --mode legacy`.
+
+Новые изменения в шаблонах отчёта должны вноситься в `reporting/templates/*`. Добавлять третью параллельную ветку шаблонов нельзя.
