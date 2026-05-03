@@ -8,7 +8,7 @@
 <body>
 <main>
   <header class="report-header">
-    <p class="eyebrow">Passport-oriented Wazuh security assessment</p>
+    <p class="eyebrow">Паспортно-ориентированный отчёт Wazuh</p>
     <h1>Технический отчёт</h1>
     <p class="muted">{{ report.report_id }} · {{ report.generated_at }}</p>
   </header>
@@ -17,13 +17,13 @@
     <h2>1. Сведения об отчёте</h2>
     <table class="kv-table">
       <tbody>
-        <tr><th>Run ID</th><td>{{ report.run.run_id }}</td></tr>
-        <tr><th>Status</th><td>{{ report.run.status }}</td></tr>
-        <tr><th>Profile</th><td>{{ report.run.profile }}</td></tr>
-        <tr><th>Mode</th><td>{{ report.mode|default("summary") }}</td></tr>
+        <tr><th>Идентификатор run</th><td>{{ report.run.run_id }}</td></tr>
+        <tr><th>Статус</th><td>{% if report.run.status in ["succeeded", "completed", "success"] %}завершено успешно{% else %}{{ report.run.status }}{% endif %}</td></tr>
+        <tr><th>Профиль</th><td>{{ report.run.profile }}</td></tr>
+        <tr><th>Режим</th><td>{% if report.mode|default("summary") == "summary" %}краткий{% else %}{{ report.mode }}{% endif %}</td></tr>
         <tr><th>Firewall backend</th><td>{{ report.policy_options.firewall_backend|default("не задан") }}</td></tr>
-        <tr><th>Started</th><td>{{ report.run.started_at }}</td></tr>
-        <tr><th>Finished</th><td>{{ report.run.finished_at }}</td></tr>
+        <tr><th>Начало проверки</th><td>{{ report.run.started_at }}</td></tr>
+        <tr><th>Завершение проверки</th><td>{{ report.run.finished_at }}</td></tr>
       </tbody>
     </table>
   </section>
@@ -33,15 +33,15 @@
     <table class="asset-table">
       <thead>
         <tr>
-          <th>Agent</th>
+          <th>Агент</th>
           <th>IP / status</th>
           <th>OS</th>
           <th>Kernel</th>
           <th>Wazuh</th>
-          <th>Total</th>
-          <th>Software</th>
-          <th>Config</th>
-          <th>Max severity</th>
+          <th>Всего</th>
+          <th>ПО</th>
+          <th>Конф.</th>
+          <th>Макс. риск</th>
         </tr>
       </thead>
       <tbody>
@@ -73,27 +73,27 @@
   <section>
     <h2>4. Сводка результатов проверки</h2>
     <div class="metrics">
-      <div class="metric"><span>Raw findings</span><b>{{ report.summary.raw_findings }}</b></div>
-      <div class="metric"><span>Unique findings</span><b>{{ report.summary.unique_findings }}</b></div>
-      <div class="metric"><span>Passports</span><b>{{ report.passport_registry_meta.total }}</b></div>
-      <div class="metric"><span>Remediation groups</span><b>{{ report.summary.remediation_groups }}</b></div>
-      <div class="metric"><span>Exceptions</span><b>{{ report.summary.exceptions }}</b></div>
+      <div class="metric"><span>Исходных записей</span><b>{{ report.summary.raw_findings }}</b></div>
+      <div class="metric"><span>Уникальных findings</span><b>{{ report.summary.unique_findings }}</b></div>
+      <div class="metric"><span>Паспортов в реестре</span><b>{{ report.passport_registry_meta.total }}</b></div>
+      <div class="metric"><span>Групп устранения</span><b>{{ report.summary.remediation_groups }}</b></div>
+      <div class="metric"><span>Исключений</span><b>{{ report.summary.exceptions }}</b></div>
     </div>
     <div class="summary-grid">
       <table>
-        <thead><tr><th>Severity</th><th>Count</th></tr></thead>
+        <thead><tr><th>Критичность</th><th>Кол-во</th></tr></thead>
         <tbody>{% for severity, count in report.summary.by_severity.items() %}<tr><td>{{ severity }}</td><td>{{ count }}</td></tr>{% endfor %}</tbody>
       </table>
       <table>
-        <thead><tr><th>Type</th><th>Count</th></tr></thead>
+        <thead><tr><th>Тип</th><th>Кол-во</th></tr></thead>
         <tbody>{% for type, count in report.summary.by_type.items() %}<tr><td>{{ type }}</td><td>{{ count }}</td></tr>{% endfor %}</tbody>
       </table>
       <table>
-        <thead><tr><th>Subsystem</th><th>Count</th></tr></thead>
+        <thead><tr><th>Подсистема</th><th>Кол-во</th></tr></thead>
         <tbody>{% for subsystem, count in report.summary.by_subsystem.items() %}<tr><td>{{ subsystem }}</td><td>{{ count }}</td></tr>{% endfor %}</tbody>
       </table>
       <table>
-        <thead><tr><th>Applicability</th><th>Count</th></tr></thead>
+        <thead><tr><th>Применимость</th><th>Кол-во</th></tr></thead>
         <tbody>{% for status, count in report.summary.by_applicability.items() %}<tr><td>{{ status }}</td><td>{{ count }}</td></tr>{% endfor %}</tbody>
       </table>
     </div>
@@ -108,13 +108,13 @@
     <h2>6. Приоритетный план устранения</h2>
     <table class="plan-table">
       <thead>
-        <tr><th>Priority</th><th>Group</th><th>Severity</th><th>Assets</th><th>Findings</th><th>Summary</th></tr>
+        <tr><th>Приоритет</th><th>Группа</th><th>Критичность</th><th>Активы</th><th>Findings</th><th>Сводка</th></tr>
       </thead>
       <tbody>
-        {% for group in report.remediation_plan %}
+        {% for group in report.summary_remediation_plan|default(report.remediation_plan) %}
         <tr>
           <td>{{ group.priority }}</td>
-          <td>{{ group.title }}</td>
+          <td>{{ group.title_ru|default(group.title) }}</td>
           <td><span class="badge severity-{{ group.severity_max }}">{{ group.severity_max }}</span></td>
           <td>{{ ", ".join(group.affected_assets) }}</td>
           <td>{{ group.affected_findings|length }}</td>
@@ -128,8 +128,9 @@
   </section>
 
   <section>
-    <h2>7. Паспорта ключевых уязвимостей установленного ПО</h2>
-    {% set software_passports = report.summary_passports|selectattr("passport_type", "equalto", "software")|list %}
+    <h2>7. Паспорта ключевых уязвимостей и несоответствий</h2>
+    <h3>Установленное ПО</h3>
+    {% set software_passports = report.summary_passports|selectattr("passport_type", "in", ["software", "software_group"])|list %}
     {% if software_passports %}
       {% for passport in software_passports %}
         {% include "passport_card.html" %}
@@ -137,10 +138,7 @@
     {% else %}
       <p class="muted">Уязвимости установленного ПО не включены в область данного отчёта или не прошли порог summary-режима. Полный перечень доступен в <code>passport_registry.json</code> и <code>passport_registry.html</code>.</p>
     {% endif %}
-  </section>
-
-  <section>
-    <h2>8. Паспорта ключевых уязвимостей конфигурации</h2>
+    <h3>Конфигурация</h3>
     {% set configuration_passports = report.summary_passports|selectattr("passport_type", "equalto", "configuration")|list %}
     {% if configuration_passports %}
       {% for passport in configuration_passports %}
@@ -152,19 +150,17 @@
   </section>
 
   <section>
-    <h2>9. Порядок проверки устранения</h2>
+    <h2>8. Порядок проверки устранения</h2>
     <table class="plan-table">
-      <thead><tr><th>Priority</th><th>Group</th><th>Assets</th><th>Verification</th></tr></thead>
+      <thead><tr><th>Тип проверки</th><th>Команды и ожидаемый результат</th></tr></thead>
       <tbody>
-        {% for group in report.remediation_plan[:10] %}
+        {% for item in report.summary_verification_checklist|default([]) %}
         <tr>
-          <td>{{ group.priority }}</td>
-          <td>{{ group.title }}</td>
-          <td>{{ ", ".join(group.affected_assets) }}</td>
-          <td>{% for step in group.verification[:3] %}<code>{{ step.command }}</code><br><span class="muted">{{ step.expected_result }}{% if step.requires_root %} · root{% endif %}{% if step.manual %} · manual{% endif %}</span>{% if not loop.last %}<br>{% endif %}{% endfor %}</td>
+          <td>{{ item.title }}</td>
+          <td>{% for step in item.steps[:4] %}<code>{{ step.command }}</code><br><span class="muted">{{ step.expected_result }}{% if step.requires_root %} · root{% endif %}{% if step.manual %} · ручная проверка{% endif %}</span>{% if not loop.last %}<br>{% endif %}{% endfor %}</td>
         </tr>
         {% else %}
-        <tr><td colspan="4">Нет команд проверки для выбранных данных.</td></tr>
+        <tr><td colspan="2">Нет команд проверки для выбранных данных.</td></tr>
         {% endfor %}
       </tbody>
     </table>
@@ -172,12 +168,12 @@
   </section>
 
   <section>
-    <h2>10. Исключения и ограничения применимости</h2>
+    <h2>9. Исключения и ограничения применимости</h2>
     {% include "exceptions_summary.html" %}
   </section>
 
   <section class="appendix-note">
-    <h2>11. Сведения о машинно-читаемых приложениях</h2>
+    <h2>10. Сведения о машинно-читаемых приложениях</h2>
     <p>Полная детализация вынесена в отдельные артефакты рядом с отчётом.</p>
     <ul>
       <li><code>normalized_report.json</code></li>

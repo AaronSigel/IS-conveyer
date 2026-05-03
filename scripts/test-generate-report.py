@@ -82,6 +82,7 @@ def run_technical_report(tmpdir):
         html.read_text(encoding="utf-8"),
         json.loads(registry_json.read_text(encoding="utf-8")),
         registry_html.read_text(encoding="utf-8"),
+        split_dir,
     )
 
 
@@ -218,7 +219,7 @@ def main():
         assert "<td>package.architecture</td><td>amd64</td>" in html_report
         assert "<td>vulnerability.scanner.source</td><td>Canonical Security Tracker</td>" in html_report
 
-        normalized, technical_html, registry_json, registry_html = run_technical_report(tmpdir)
+        normalized, technical_html, registry_json, registry_html, technical_split_dir = run_technical_report(tmpdir)
         assert normalized["summary"]["raw_findings"] == 4
         assert normalized["summary"]["unique_findings"] == 4
         assert normalized["scope"]["assets"]
@@ -229,22 +230,35 @@ def main():
         assert any(passport["vulnerability_class"] == "уязвимость кода" for passport in normalized["vulnerability_passports"])
         assert any(passport["vulnerability_class"] == "уязвимость конфигурации" for passport in normalized["vulnerability_passports"])
         assert all(passport["passport_completeness_score"] >= 0.9 for passport in normalized["summary_passports"])
+        assert len([passport for passport in normalized["summary_passports"] if passport["passport_type"] in {"software", "software_group"}]) <= 10
+        assert len(normalized["summary_remediation_plan"]) <= 16
+        assert normalized["summary_verification_checklist"]
         assert "Приоритетный план устранения" in technical_html
         assert "Порядок проверки устранения" in technical_html
         assert "Матрица соответствия структуре паспорта уязвимости" in technical_html
-        assert "Паспорта ключевых уязвимостей установленного ПО" in technical_html
-        assert "Паспорта ключевых уязвимостей конфигурации" in technical_html
+        assert "Паспорта ключевых уязвимостей и несоответствий" in technical_html
         assert "PKG-CVE-" not in technical_html
         assert "No main findings for the selected filters" not in technical_html
+        assert "Command output matches the remediation target" not in technical_html
+        assert "Package default status" not in technical_html
+        assert "Raw expected state" not in technical_html
         assert "Уязвимость CVE-2025-32463 в пакете sudo" in technical_html
         assert registry_json == normalized["vulnerability_passports"]
         assert "Реестр паспортов уязвимостей" in registry_html
+        assert "Raw expected state" in registry_html
         assert "Full normalized JSON" not in technical_html
         assert "Appendix A. Raw Wazuh fields" not in technical_html
         assert "{{ report|json }}" not in technical_html
         main_before_appendix = technical_html.split("Appendix A. Raw Wazuh fields", 1)[0]
         assert "_index" not in main_before_appendix
         assert "package.size" not in main_before_appendix
+
+        quality_spec = importlib.util.spec_from_file_location("report_quality_check", PROJECT_ROOT / "scripts" / "report_quality_check.py")
+        quality = importlib.util.module_from_spec(quality_spec)
+        assert quality_spec and quality_spec.loader
+        quality_spec.loader.exec_module(quality)
+        failures = quality.check_report_quality(normalized, technical_html, technical_split_dir)
+        assert not failures, failures
 
     print("generate-report smoke tests passed")
 

@@ -72,6 +72,15 @@ section {
   break-inside: auto;
 }
 
+.section-card,
+.passport-card,
+.summary-grid,
+.matrix-table,
+.remediation-table {
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+
 table {
   border-collapse: collapse;
   margin: 8px 0 16px;
@@ -193,6 +202,16 @@ code {
   font-family: "Cascadia Mono", Consolas, monospace;
   font-size: 10.5px;
   padding: 1px 4px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.long-text {
+  max-height: none;
+}
+
+.no-print-summary-overflow {
+  display: none;
 }
 
 .code-list {

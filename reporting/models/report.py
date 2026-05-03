@@ -14,6 +14,8 @@ class NormalizedReport(TypedDict, total=False):
     vulnerability_passports: list[dict[str, Any]]
     summary_passports: list[dict[str, Any]]
     passport_registry_meta: dict[str, Any]
+    summary_remediation_plan: list[dict[str, Any]]
+    summary_verification_checklist: list[dict[str, Any]]
     remediation_plan: list[dict[str, Any]]
     remediation_groups: list[dict[str, Any]]
     findings: list[dict[str, Any]]

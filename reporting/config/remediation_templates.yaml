@@ -66,6 +66,17 @@ core_dumps:
     - "systemd-analyze cat-config systemd/coredump.conf"
     - "grep -R \"hard core\" /etc/security/limits.conf /etc/security/limits.d || true"
   rollback: "Restore the previous sysctl, limits, or systemd-coredump configuration"
+bootloader:
+  title: "Ensure bootloader password is set"
+  summary: "Configure GRUB bootloader authentication and protect boot menu changes"
+  verification:
+    - command: "grep -R \"password_pbkdf2\" /boot/grub/grub.cfg /etc/grub.d /etc/default/grub 2>/dev/null || true"
+      expected_result: "GRUB bootloader password configuration is present"
+      requires_root: false
+      safe_to_run: true
+      manual: true
+      notes: "Exact password hash and authorized users are environment-specific"
+  rollback: "Restore previous GRUB configuration and regenerate grub.cfg if required"
 ssh:
   title: "Harden sshd_config"
   summary: "Apply SSH daemon hardening in /etc/ssh/sshd_config.d and reload sshd after syntax validation"
@@ -253,6 +264,39 @@ insecure_services:
       manual: false
       notes: ""
   rollback: "Reinstall a removed package only after documenting accepted business need"
+ftp_client:
+  title: "Ensure ftp client is not installed"
+  summary: "Remove FTP client packages such as ftp or tnftp unless explicitly justified"
+  commands:
+    - "sudo apt purge ftp tnftp 2>/dev/null || true"
+    - "sudo apt autoremove"
+  verification:
+    - command: "dpkg -l | grep -E '^(ii|hi)\\s+(ftp|tnftp)\\b' || true"
+      expected_result: "FTP client packages are not installed"
+      requires_root: false
+      safe_to_run: true
+      manual: false
+      notes: ""
+  rollback: "Reinstall FTP client only after documenting accepted business need"
+rsync_service:
+  title: "Ensure rsync services are not in use"
+  summary: "Remove or disable rsync service/package when it is not required by the host role"
+  commands:
+    - "sudo systemctl disable --now rsync 2>/dev/null || true"
+  verification:
+    - command: "systemctl is-enabled rsync 2>/dev/null || true"
+      expected_result: "rsync service is disabled or absent"
+      requires_root: false
+      safe_to_run: true
+      manual: false
+      notes: ""
+    - command: "dpkg -l | grep -E '^(ii|hi)\\s+rsync\\b' || true"
+      expected_result: "rsync package is absent when not required by policy"
+      requires_root: false
+      safe_to_run: true
+      manual: true
+      notes: "Some environments require rsync as a client utility"
+  rollback: "Restore rsync service/package only after documenting accepted business need"
 auditd:
   title: "Configure auditd and audit rules"
   summary: "Install auditd, load audit rules, and verify audit subsystem status"
@@ -289,6 +333,14 @@ audit_50_identity:
     - "augenrules --check"
     - "auditctl -l"
   rollback: "Restore previous 50-identity.rules and reload auditd"
+audit_locale_network:
+  title: "Configure audit rules for locale and network changes"
+  summary: "Apply audit rules for system locale, hostname, hosts, and network configuration changes"
+  verification:
+    - "test -f /etc/audit/rules.d/50-system_locale.rules"
+    - "augenrules --check"
+    - "auditctl -l"
+  rollback: "Restore previous locale/network audit rules and reload auditd"
 audit_99_finalize:
   title: "Finalize audit rules"
   summary: "Apply immutable/final audit settings in /etc/audit/rules.d/99-finalize.rules"

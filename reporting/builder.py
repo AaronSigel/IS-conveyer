@@ -56,6 +56,110 @@ def _summary(
     }
 
 
+def _summary_remediation_plan(groups: list[dict[str, Any]], limit: int = 15) -> list[dict[str, Any]]:
+    if len(groups) <= limit:
+        return groups
+
+    selected: list[dict[str, Any]] = []
+    selected_ids: set[str] = set()
+    for group in groups:
+        if str(group.get("priority")).upper() == "P1":
+            selected.append(group)
+            selected_ids.add(str(group.get("group_id")))
+
+    for group in groups:
+        if len(selected) >= limit:
+            break
+        group_id = str(group.get("group_id"))
+        if group_id in selected_ids:
+            continue
+        if str(group.get("priority")).upper() == "P2":
+            selected.append(group)
+            selected_ids.add(group_id)
+
+    for group in groups:
+        if len(selected) >= limit:
+            break
+        group_id = str(group.get("group_id"))
+        if group_id not in selected_ids:
+            selected.append(group)
+            selected_ids.add(group_id)
+
+    remainder = [group for group in groups if str(group.get("group_id")) not in selected_ids]
+    if not remainder:
+        return selected
+
+    package_remainder = [group for group in remainder if group.get("action_type") == "package_update"]
+    config_remainder = [group for group in remainder if group.get("action_type") == "config_change"]
+    title = "Прочие плановые обновления" if len(package_remainder) >= len(config_remainder) else "Прочие плановые изменения конфигурации"
+    summary = (
+        f"{len(remainder)} групп P3/P4 или ниже свернуты в summary-отчете. "
+        "Полный перечень доступен в passport_registry.html."
+    )
+    collapsed = {
+        "group_id": "SUMMARY-REMEDIATION-ROLLED-UP",
+        "action_type": "summary_rollup",
+        "title": title,
+        "title_ru": title,
+        "priority": "P3",
+        "severity_max": max((group.get("severity_max", "info") for group in remainder), key=severity_rank, default="info"),
+        "affected_assets": sorted({asset for group in remainder for asset in group.get("affected_assets", [])}),
+        "affected_findings": [uid for group in remainder for uid in group.get("affected_findings", [])],
+        "summary": summary,
+        "commands": [],
+        "verification": [],
+        "rollback": "not applicable",
+        "is_collapsed_summary": True,
+    }
+    return selected + [collapsed]
+
+
+def _summary_verification_checklist(groups: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    checklist: list[dict[str, Any]] = []
+    if any(group.get("action_type") == "package_update" for group in groups):
+        checklist.append(
+            {
+                "title": "Проверка обновления пакетов",
+                "steps": [
+                    {"command": "apt list --upgradable", "expected_result": "затронутые пакеты отсутствуют в списке доступных обновлений"},
+                    {"command": "dpkg-query -W <package>", "expected_result": "установленная версия соответствует исправленной версии или актуальному security update"},
+                    {"command": "repeat Wazuh vulnerability scan", "expected_result": "повторное сканирование Wazuh Vulnerability Detection не выявляет устраненные CVE", "manual": True},
+                ],
+            }
+        )
+
+    templates = {
+        "ssh": ("Проверка SSH", ["sshd -T", "systemctl status ssh"]),
+        "pam": ("Проверка PAM", ["grep -R \"pam_faillock\\|pam_pwquality\\|pam_pwhistory\" /etc/pam.d /etc/security || true"]),
+        "apparmor": ("Проверка AppArmor", ["systemctl is-active apparmor", "apparmor_status"]),
+        "auditd": ("Проверка auditd", ["systemctl is-active auditd", "auditctl -s", "augenrules --check"]),
+        "firewall": ("Проверка межсетевого экранирования", ["systemctl is-active <selected-firewall-backend>", "nft list ruleset || ufw status verbose || iptables -L -n -v"]),
+        "cron_at": ("Проверка cron/at", ["stat -c '%a %U %G %n' /etc/cron.allow /etc/at.allow 2>/dev/null || true"]),
+        "bootloader": ("Проверка GRUB bootloader", ["grep -R \"password_pbkdf2\" /boot/grub/grub.cfg /etc/grub.d /etc/default/grub 2>/dev/null || true"]),
+        "aide": ("Проверка AIDE", ["dpkg -s aide aide-common", "systemctl is-enabled dailyaidecheck.timer"]),
+        "time_sync": ("Проверка синхронизации времени", ["systemctl is-active chrony", "chronyc tracking"]),
+        "insecure_services": ("Проверка legacy clients/services", ["dpkg -l | grep -E '^(ii|hi)\\s+(telnet|rsh-client|nis|talk|ftp|tnftp|rsync)\\b' || true"]),
+    }
+    seen: set[str] = set()
+    for group in groups:
+        action_key = str(group.get("action_key") or "")
+        base_key = "firewall" if action_key.startswith("firewall:") else action_key
+        if base_key in seen or base_key not in templates:
+            continue
+        seen.add(base_key)
+        title, commands = templates[base_key]
+        checklist.append(
+            {
+                "title": title,
+                "steps": [
+                    {"command": command, "expected_result": "результат команды соответствует ожидаемому безопасному состоянию"}
+                    for command in commands
+                ],
+            }
+        )
+    return checklist
+
+
 def _compact_raw_refs(findings: list[dict[str, Any]]) -> list[dict[str, Any]]:
     refs: dict[str, dict[str, Any]] = {}
     for finding in findings:
@@ -154,6 +258,8 @@ def build_normalized_report(
                 "include_info": bool(options.get("include_info", False)),
             },
         },
+        "summary_remediation_plan": _summary_remediation_plan(remediation_groups),
+        "summary_verification_checklist": _summary_verification_checklist(remediation_groups),
         "remediation_plan": remediation_groups,
         "remediation_groups": remediation_groups,
         "findings": main_findings,

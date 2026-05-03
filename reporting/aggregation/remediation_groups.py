@@ -72,40 +72,48 @@ def _config_action_key(finding: dict[str, Any]) -> str:
         return "aide"
     if "core dump" in text or "coredump" in text or "systemd-coredump" in text:
         return "core_dumps"
-    if "sshd" in text or "ssh " in text or " ssh" in text:
-        return "ssh"
     if "apparmor" in text:
         return "apparmor"
-    if "pam" in text or "faillock" in text or "pwquality" in text or "password" in text:
-        return "pam"
-    if "chrony" in text or "ntp" in text or "time synchronization" in text or "timesync" in text:
-        return "time_sync"
-    if "cron" in text or re.search(r"\bat\b", text):
-        return "cron_at"
-    if "ufw" in text or "iptables" in text or "ip6tables" in text or "nftables" in text or "firewall" in text:
-        return "firewall"
-    if "message of the day" in text or "motd" in text or "login banner" in text or "/etc/issue" in text:
-        return "login_banners"
-    if "telnet" in text or "rsh" in text or "nis" in text or "talk client" in text or "ldap-utils" in text:
-        return "insecure_services"
-    if "audit" in text or "auditd" in text or "augenrules" in text or "auditctl" in text:
+    if "bootloader" in text or "grub" in text:
+        return "bootloader"
+    if "audit" in text or "auditd" in text or "augenrules" in text or "auditctl" in text or "/etc/audit" in text:
         if "50-scope.rules" in text or "scope" in title:
             return "audit_50_scope"
         if "50-user_emulation.rules" in text or "user emulation" in title:
             return "audit_50_user_emulation"
         if "50-identity.rules" in text or "identity" in title:
             return "audit_50_identity"
+        if "system-locale" in text or "network configuration" in title or "hosts" in title or "netplan" in text:
+            return "audit_locale_network"
         if "99-finalize.rules" in text or "immutable" in text or "finalize" in title:
             return "audit_99_finalize"
         return "auditd"
+    if "message of the day" in text or "motd" in text or "login banner" in text or "/etc/issue" in text:
+        return "login_banners"
+    if "sshd" in text or "ssh " in text or " ssh" in text:
+        return "ssh"
+    if "pam" in text or "faillock" in text or "pwquality" in text or "password" in text:
+        return "pam"
+    if "chrony" in text or "ntp" in text or "time synchronization" in text or "timesync" in text:
+        return "time_sync"
+    if "cron" in text or "/etc/at." in text or " at access" in title or re.search(r"\bat\.allow\b|\bat\.deny\b", text):
+        return "cron_at"
+    if "ufw" in text or "iptables" in text or "ip6tables" in text or "nftables" in text or "firewall" in text:
+        return "firewall"
+    if "ftp client" in text or "tnftp" in text or re.search(r"\bftp\b", text):
+        return "ftp_client"
+    if "rsync" in text:
+        return "rsync_service"
+    if "telnet" in text or "rsh" in text or "nis" in text or "talk client" in text or "talk server" in text:
+        return "insecure_services"
+    if subsystem == "kernel":
+        return "kernel_modules"
     if "/tmp" in text or "/dev/shm" in text:
         return "tmp_mount_options"
     if "/var/log/audit" in text or "/var/log" in text or "/var/tmp" in text or re.search(r"\b/var\b", text):
         return "system_partitions"
     if subsystem == "filesystem" and any(option in text for option in ("nodev", "nosuid", "noexec", "partition", "mount")):
         return "filesystem_mount_options"
-    if subsystem == "kernel":
-        return "kernel_modules"
     if subsystem == "logging":
         return "logging"
     return f"{subsystem}:{finding.get('requirement', {}).get('id') or finding.get('title')}"
@@ -196,9 +204,14 @@ def _verification_step(
     manual: bool = False,
     notes: str = "",
 ) -> dict[str, Any]:
+    translations = {
+        "Command completes successfully and confirms the desired state": "команда выполняется успешно и подтверждает безопасное состояние",
+        "Command output matches the remediation target": "результат команды соответствует ожидаемому безопасному состоянию",
+        "Original scanner check confirms compliance": "исходная проверка сканера подтверждает соответствие",
+    }
     return {
         "command": command,
-        "expected_result": expected_result,
+        "expected_result": translations.get(expected_result, expected_result),
         "requires_root": requires_root,
         "safe_to_run": safe_to_run,
         "manual": manual,
@@ -302,11 +315,14 @@ def _config_title_summary(action_key: str, findings: list[dict[str, Any]]) -> tu
     titles = {
         "aide": "Configure AIDE integrity monitoring",
         "apparmor": "Configure AppArmor mandatory access control",
+        "bootloader": "Ensure bootloader password is set",
         "core_dumps": "Disable and harden core dump handling",
         "ssh": "Harden sshd_config",
         "pam": "Configure PAM password and lockout policy",
         "time_sync": "Configure time synchronization",
         "cron_at": "Harden cron and at access",
+        "ftp_client": "Ensure ftp client is not installed",
+        "rsync_service": "Ensure rsync services are not in use",
         "firewall": "Choose and configure a single firewall backend",
         "firewall:nftables": "Configure nftables firewall backend",
         "firewall:ufw": "Configure UFW firewall backend",
@@ -314,6 +330,7 @@ def _config_title_summary(action_key: str, findings: list[dict[str, Any]]) -> tu
         "login_banners": "Configure login banners",
         "insecure_services": "Remove insecure clients and services",
         "auditd": "Configure auditd and audit rules",
+        "audit_locale_network": "Configure audit rules for locale and network changes",
         "audit_50_scope": "Configure audit scope rules",
         "audit_50_user_emulation": "Configure audit user emulation rules",
         "audit_50_identity": "Configure audit identity rules",
@@ -327,6 +344,37 @@ def _config_title_summary(action_key: str, findings: list[dict[str, Any]]) -> tu
     title = titles.get(action_key, findings[0].get("title") or "Apply configuration change")
     summary = f"Apply {len(findings)} related configuration checks as one operational change"
     return title, summary
+
+
+def _config_title_ru(action_key: str, title: str) -> str:
+    base_key = "firewall" if action_key.startswith("firewall:") else action_key
+    mapping = {
+        "aide": "Настройка контроля целостности AIDE",
+        "apparmor": "Настройка мандатного контроля доступа AppArmor",
+        "bootloader": "Настройка пароля загрузчика GRUB",
+        "core_dumps": "Отключение и ограничение core dump",
+        "ssh": "Недостаточная настройка параметров SSH-сервера",
+        "pam": "Недостаточная настройка политики аутентификации PAM",
+        "time_sync": "Настройка синхронизации времени",
+        "cron_at": "Ограничение доступа к cron и at",
+        "ftp_client": "Наличие FTP-клиента",
+        "rsync_service": "Использование службы rsync",
+        "firewall": "Настройка межсетевого экранирования хоста",
+        "login_banners": "Настройка предупреждающих баннеров входа",
+        "insecure_services": "Наличие небезопасных клиентских программ и сервисов",
+        "auditd": "Настройка подсистемы аудита auditd",
+        "audit_locale_network": "Настройка аудита изменений локали и сети",
+        "audit_50_scope": "Настройка правил аудита scope",
+        "audit_50_user_emulation": "Настройка правил аудита user emulation",
+        "audit_50_identity": "Настройка правил аудита identity",
+        "audit_99_finalize": "Финализация правил аудита",
+        "tmp_mount_options": "Усиление параметров временных файловых систем",
+        "system_partitions": "Изоляция системных разделов и журналов",
+        "filesystem_mount_options": "Усиление параметров монтирования файловых систем",
+        "kernel_modules": "Отключение неиспользуемых модулей ядра",
+        "logging": "Настройка системного журналирования",
+    }
+    return mapping.get(base_key, title or "Настройка параметров безопасности хоста")
 
 
 def _package_commands(findings: list[dict[str, Any]]) -> tuple[list[str], list[dict[str, Any]], str]:
@@ -401,16 +449,20 @@ def build_remediation_groups(findings: list[dict[str, Any]], policy_options: dic
             max_cvss = max((float(vulnerability.get("cvss")) for vulnerability in vulnerabilities if vulnerability.get("cvss") not in (None, "", "unknown")), default=None)
             title = f"Update package {package_name} on {asset}"
             summary = f"Update package {package_name} to a fixed version or latest security update"
+            title_ru = f"Обновление пакета {package_name} на {asset}"
             group_id = stable_id("PKG-GRP", agent_id, package_name, package_version, package_arch)
         elif action_type == "config_change":
             sample = items[0]
-            title, summary = _config_title_summary(str(key[1]), items)
-            commands = _commands_for_config(str(key[1]), sample)
-            verification = _verification_for_config_group(str(key[1]), items)
-            rollback = _rollback_for_config(str(key[1]))
+            action_key = str(key[1])
+            title, summary = _config_title_summary(action_key, items)
+            title_ru = _config_title_ru(action_key, title)
+            commands = _commands_for_config(action_key, sample)
+            verification = _verification_for_config_group(action_key, items)
+            rollback = _rollback_for_config(action_key)
             group_id = stable_id("REM-CFG", key[1])
         else:
             title = "Manual review"
+            title_ru = "Ручная проверка"
             summary = "Review findings manually"
             commands = []
             verification = [_verification_step("repeat Wazuh scan", expected_result="Manual review finding is resolved", manual=True)]
@@ -421,6 +473,8 @@ def build_remediation_groups(findings: list[dict[str, Any]], policy_options: dic
             "group_id": group_id,
             "action_type": action_type,
             "title": title,
+            "title_ru": title_ru,
+            "action_key": str(key[1]) if len(key) > 1 else action_type,
             "severity_max": severity_max,
             "affected_assets": affected_assets,
             "affected_findings": [item["finding_uid"] for item in items],

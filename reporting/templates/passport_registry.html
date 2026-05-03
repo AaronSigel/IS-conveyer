@@ -13,6 +13,7 @@
     <p class="muted">{{ report.report_id }} · {{ report.generated_at }} · всего паспортов: {{ report.vulnerability_passports|length }}</p>
   </header>
   <section>
+    {% set registry_mode = true %}
     {% for passport in report.vulnerability_passports %}
       {% include "passport_card.html" %}
     {% else %}

@@ -25,7 +25,11 @@ class VulnerabilityPassport(TypedDict, total=False):
     source: str
     actual_state: str
     expected_state: str
+    expected_state_human: str
+    expected_state_raw: str
     description: str
+    description_short: str
+    description_full: str
     conditions: str
     severity: str
     priority: str
@@ -43,4 +47,8 @@ class VulnerabilityPassport(TypedDict, total=False):
     passport_type: str
     linked_checks: list[dict[str, Any]]
     completeness_score: float
+    mandatory_completeness: float
+    extended_completeness: float
+    missing_extended_fields: list[str]
+    completeness_note: str
     completeness_status: str

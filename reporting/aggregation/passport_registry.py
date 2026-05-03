@@ -1,9 +1,11 @@
 from __future__ import annotations
 
-from collections import defaultdict
+import re
+from collections import Counter, defaultdict
 from typing import Any
 
 from reporting.common import severity_rank, stable_id, unique_sorted
+from reporting.text_normalization import limit_summary_text, normalize_whitespace
 
 
 NO_SOURCE = "не установлено по данным источника"
@@ -39,7 +41,9 @@ def _fixed_version(condition: Any) -> str:
     lower = text.lower()
     if "less than" in lower:
         return text[lower.index("less than") + len("less than") :].strip().rstrip(".")
-    return text if text and text != "not provided" else NO_SOURCE
+    if text and text not in {"not provided", "Package default status"}:
+        return text
+    return "исправленная версия не указана источником; требуется установка актуального security update"
 
 
 def _package_title(finding: dict[str, Any]) -> tuple[str, str]:
@@ -50,7 +54,14 @@ def _package_title(finding: dict[str, Any]) -> tuple[str, str]:
 
 def _configuration_title(group: dict[str, Any]) -> tuple[str, str]:
     title = str(group.get("title") or "")
+    if group.get("title_ru"):
+        return str(group["title_ru"]), title or "Configuration hardening finding"
     mapping = {
+        "Configure AIDE integrity monitoring": "Настройка контроля целостности AIDE",
+        "Configure time synchronization": "Настройка синхронизации времени",
+        "Ensure bootloader password is set": "Настройка пароля загрузчика GRUB",
+        "Ensure ftp client is not installed": "Наличие FTP-клиента",
+        "Ensure rsync services are not in use": "Использование службы rsync",
         "Harden sshd_config": "Недостаточная настройка параметров безопасности SSH-сервера",
         "Configure PAM password and lockout policy": "Недостаточная настройка политики аутентификации PAM",
         "Choose and configure a single firewall backend": "Неполная настройка межсетевого экранирования хоста",
@@ -58,6 +69,7 @@ def _configuration_title(group: dict[str, Any]) -> tuple[str, str]:
         "Configure UFW firewall backend": "Неполная настройка межсетевого экранирования хоста",
         "Configure iptables firewall backend": "Неполная настройка межсетевого экранирования хоста",
         "Configure auditd and audit rules": "Недостаточная настройка подсистемы аудита auditd",
+        "Configure audit rules for locale and network changes": "Настройка аудита изменений локали и сети",
         "Configure AppArmor mandatory access control": "Недостаточная настройка мандатного контроля доступа AppArmor",
         "Disable unused kernel modules": "Доступность неиспользуемых модулей ядра",
         "Remove insecure clients and services": "Наличие небезопасных клиентских программ и сервисов",
@@ -69,6 +81,25 @@ def _configuration_title(group: dict[str, Any]) -> tuple[str, str]:
 
 
 def _configuration_component(group: dict[str, Any], findings: list[dict[str, Any]]) -> str:
+    action_key = str(group.get("action_key") or "")
+    component_by_action = {
+        "bootloader": "GRUB bootloader",
+        "ftp_client": "FTP client package",
+        "rsync_service": "rsync service/package",
+        "login_banners": "login banners",
+        "audit_locale_network": "auditd",
+        "cron_at": "cron and at access control",
+        "kernel_modules": "Linux kernel modules",
+        "insecure_services": "legacy network clients and services",
+        "aide": "AIDE integrity monitoring",
+        "time_sync": "time synchronization service",
+        "core_dumps": "core dump handling",
+        "logging": "system logging",
+    }
+    if action_key.startswith("firewall:"):
+        return "Host firewall"
+    if action_key in component_by_action:
+        return component_by_action[action_key]
     title = str(group.get("title") or "").lower()
     if "ssh" in title:
         return "OpenSSH server"
@@ -87,6 +118,31 @@ def _configuration_component(group: dict[str, Any], findings: list[dict[str, Any
 
 
 def _configuration_location(group: dict[str, Any], findings: list[dict[str, Any]]) -> str:
+    action_key = str(group.get("action_key") or "")
+    location_by_action = {
+        "bootloader": "/boot/grub/grub.cfg, /etc/grub.d/*, /etc/default/grub",
+        "ftp_client": "installed packages ftp/tnftp",
+        "rsync_service": "rsync package and rsync.service",
+        "login_banners": "/etc/issue, /etc/issue.net, sshd Banner",
+        "audit_locale_network": "/etc/audit/rules.d/50-system_locale.rules, auditctl rules",
+        "cron_at": "/etc/cron.*, /etc/at.allow, /etc/at.deny",
+        "kernel_modules": "/etc/modprobe.d/*, lsmod, module denylist",
+        "insecure_services": "installed packages and services telnet/rsh/nis/talk",
+        "aide": "/etc/aide/*, /var/lib/aide/*, dailyaidecheck.timer",
+        "time_sync": "chrony/systemd-timesyncd service configuration",
+        "core_dumps": "/etc/systemd/coredump.conf, /etc/security/limits.conf, sysctl",
+        "logging": "systemd-journald and logging configuration",
+    }
+    if action_key.startswith("firewall:"):
+        backend = action_key.split(":", 1)[1]
+        return {
+            "ufw": "ufw ruleset and service configuration",
+            "nftables": "nftables ruleset and service configuration",
+            "iptables": "iptables/ip6tables ruleset",
+            "choose": "selected host firewall backend configuration",
+        }.get(backend, "host firewall configuration")
+    if action_key in location_by_action:
+        return location_by_action[action_key]
     text = " ".join([str(group.get("title") or ""), *(str(item.get("check", {}).get("command") or "") for item in findings)])
     lowered = text.lower()
     if "ssh" in lowered or "sshd" in lowered:
@@ -115,6 +171,31 @@ def _configuration_location(group: dict[str, Any], findings: list[dict[str, Any]
         return "/home"
     commands = unique_sorted([item.get("check", {}).get("command") for item in findings if item.get("check", {}).get("command")])
     return ", ".join(commands[:3]) if commands else MANUAL_REVIEW
+
+
+def _expected_state_human(group: dict[str, Any], component: str) -> str:
+    action_key = str(group.get("action_key") or "")
+    base_key = "firewall" if action_key.startswith("firewall:") else action_key
+    mapping = {
+        "ssh": "Параметры SSH-сервера соответствуют выбранному профилю безопасности CIS.",
+        "pam": "Включены требования к сложности пароля, истории паролей и блокировке после неуспешных попыток входа.",
+        "aide": "Пакет AIDE установлен, база инициализирована, периодическая проверка целостности включена.",
+        "auditd": "Служба auditd активна, правила аудита загружены и сохраняются после перезагрузки.",
+        "audit_locale_network": "Изменения системной локали, hostname, hosts и сетевой конфигурации регистрируются правилами auditd.",
+        "firewall": "Активен один выбранный backend межсетевого экранирования, конфликтующие backend'ы не используются.",
+        "apparmor": "AppArmor установлен, активен при загрузке и применяет требуемые профили.",
+        "bootloader": "Загрузчик GRUB защищен паролем, изменение параметров загрузки доступно только уполномоченным администраторам.",
+        "ftp_client": "FTP-клиенты ftp/tnftp не установлены, если нет утвержденного исключения.",
+        "rsync_service": "Служба rsync отключена или отсутствует, если она не требуется роли хоста.",
+        "login_banners": "Локальные и удаленные баннеры входа соответствуют утвержденному тексту и не раскрывают сведения о системе.",
+        "cron_at": "Доступ к cron и at ограничен разрешенными администраторами, allow/deny-файлы имеют безопасные права.",
+        "kernel_modules": "Неиспользуемые или небезопасные модули ядра запрещены через modprobe и не загружены.",
+        "insecure_services": "Небезопасные legacy-клиенты и сервисы не установлены или отключены.",
+        "time_sync": "Используется один утвержденный сервис синхронизации времени, система синхронизирована с доверенным источником.",
+        "core_dumps": "Core dump отключены или ограничены политикой, исключающей утечку чувствительных данных.",
+        "logging": "Системное журналирование включено, устойчиво к перезагрузке и соответствует профилю безопасности.",
+    }
+    return mapping.get(base_key, f"{component} соответствует выбранному профилю безопасности CIS.")
 
 
 def _weakness_for_configuration(component: str, group: dict[str, Any]) -> str:
@@ -157,14 +238,40 @@ def _score(passport: dict[str, Any], required: list[str]) -> tuple[float, str]:
     return score, "complete" if score >= 0.9 else "incomplete"
 
 
-def _finalize(passport: dict[str, Any], required: list[str]) -> dict[str, Any]:
+def _is_missing(value: Any) -> bool:
+    return value in (None, "", [], {}, NO_SOURCE, MANUAL_REVIEW, "not provided", "unknown")
+
+
+def _score_fields(passport: dict[str, Any], fields: list[str]) -> float:
+    if not fields:
+        return 1.0
+    present = sum(1 for key in fields if not _is_missing(passport.get(key)))
+    return round(present / len(fields), 2)
+
+
+def _missing_fields(passport: dict[str, Any], fields: list[str]) -> list[str]:
+    return [key for key in fields if _is_missing(passport.get(key))]
+
+
+def _finalize(passport: dict[str, Any], required: list[str], extended: list[str] | None = None) -> dict[str, Any]:
     for key, value in list(passport.items()):
         if value in (None, ""):
             passport[key] = NO_SOURCE
     score, status = _score(passport, required)
+    extended = extended or []
+    extended_score = _score_fields(passport, extended)
+    missing_extended = _missing_fields(passport, extended)
     passport["completeness_score"] = score
     passport["passport_completeness_score"] = score
+    passport["mandatory_completeness"] = score
+    passport["extended_completeness"] = extended_score
+    passport["missing_extended_fields"] = missing_extended
     passport["completeness_status"] = status
+    passport["completeness_note"] = (
+        "обязательные поля заполнены"
+        if not missing_extended
+        else "источник не содержит: " + ", ".join(missing_extended[:6])
+    )
     return passport
 
 
@@ -177,6 +284,8 @@ def _package_passport(finding: dict[str, Any], assets: list[dict[str, Any]]) -> 
     detection = finding.get("detection", {}) if isinstance(finding.get("detection"), dict) else {}
     title_ru, title_en = _package_title(finding)
     cve = _text(finding.get("cve"))
+    description_full = normalize_whitespace(_text(finding.get("description")))
+    description_short = limit_summary_text(description_full, 700)
     verification = _verification_steps(finding)
     if not verification:
         verification = [{"command": "repeat Wazuh vulnerability scan", "expected_result": "повторное сканирование Wazuh не выявляет данную CVE", "manual": True, "requires_root": False, "safe_to_run": True, "notes": ""}]
@@ -203,7 +312,11 @@ def _package_passport(finding: dict[str, Any], assets: list[dict[str, Any]]) -> 
         "source": _text(detection.get("source"), "Wazuh Vulnerability Detection"),
         "actual_state": f"Установлен пакет {package.get('name')} версии {package.get('installed_version')}",
         "expected_state": f"Пакет обновлён до исправленной версии: {_fixed_version(package.get('fixed_condition'))}",
-        "description": _text(finding.get("description")),
+        "expected_state_human": f"Пакет обновлен до исправленной версии: {_fixed_version(package.get('fixed_condition'))}",
+        "expected_state_raw": _text(package.get("fixed_condition")),
+        "description": description_short,
+        "description_short": description_short,
+        "description_full": description_full,
         "conditions": _text(detection.get("scanner_condition")),
         "severity": _text(severity.get("level"), "info"),
         "priority": _text(finding.get("priority"), "P4"),
@@ -225,7 +338,8 @@ def _package_passport(finding: dict[str, Any], assets: list[dict[str, Any]]) -> 
         "severity", "remediation_summary", "verification_steps", "source", "status", "external_ids",
         "software_name", "software_version",
     ]
-    return _finalize(passport, required)
+    extended = ["fixed_version", "cvss_score", "cvss_vector", "references", "description_full"]
+    return _finalize(passport, required, extended)
 
 
 def _configuration_passport(group: dict[str, Any], finding_by_uid: dict[str, dict[str, Any]], assets: list[dict[str, Any]]) -> dict[str, Any]:
@@ -238,6 +352,10 @@ def _configuration_passport(group: dict[str, Any], finding_by_uid: dict[str, dic
     location = _configuration_location(group, findings)
     actual_values = unique_sorted([item.get("check", {}).get("actual") for item in findings])
     expected_values = unique_sorted([item.get("check", {}).get("expected") for item in findings])
+    expected_raw = "; ".join(expected_values) if expected_values else NO_SOURCE
+    expected_human = _expected_state_human(group, component)
+    description_full = normalize_whitespace(_text(group.get("summary")))
+    description_short = limit_summary_text(description_full, 700)
     checks = [
         {
             "id": item.get("requirement", {}).get("id"),
@@ -269,8 +387,12 @@ def _configuration_passport(group: dict[str, Any], finding_by_uid: dict[str, dic
         "detection_method": "Wazuh SCA, CIS Ubuntu 24.04 policy, команда проверки",
         "source": "Wazuh SCA",
         "actual_state": "; ".join(actual_values) if actual_values else NO_SOURCE,
-        "expected_state": "; ".join(expected_values) if expected_values else NO_SOURCE,
-        "description": _text(group.get("summary")),
+        "expected_state": expected_human,
+        "expected_state_human": expected_human,
+        "expected_state_raw": expected_raw,
+        "description": description_short,
+        "description_short": description_short,
+        "description_full": description_full,
         "conditions": _text("; ".join(unique_sorted([item.get("check", {}).get("command") for item in findings])), NO_SOURCE),
         "severity": _text(group.get("severity_max"), "info"),
         "priority": _text(group.get("priority"), "P4"),
@@ -290,9 +412,91 @@ def _configuration_passport(group: dict[str, Any], finding_by_uid: dict[str, dic
     required = [
         "passport_id", "title_ru", "vulnerability_class", "asset", "component", "location", "detection_method",
         "severity", "remediation_summary", "verification_steps", "source", "status", "actual_state",
-        "expected_state",
+        "expected_state_human",
     ]
-    return _finalize(passport, required)
+    extended = ["expected_state_raw", "linked_checks", "references", "description_full"]
+    return _finalize(passport, required, extended)
+
+
+def _package_group_passport(group: dict[str, Any], assets: list[dict[str, Any]]) -> dict[str, Any]:
+    package = group.get("package", {}) if isinstance(group.get("package"), dict) else {}
+    asset_name = str(group.get("asset") or next(iter(group.get("affected_assets", []) or []), "unknown"))
+    asset = _asset_record(assets, asset_name)
+    os_name, platform = _asset_os(asset)
+    package_name = _text(package.get("name"))
+    vulnerabilities = group.get("vulnerabilities") if isinstance(group.get("vulnerabilities"), list) else []
+    top_vulnerabilities = vulnerabilities[:5]
+    cve_ids = [str(item.get("id")) for item in top_vulnerabilities if item.get("id")]
+    max_cvss = group.get("max_cvss")
+    fixed_versions = unique_sorted([item.get("fixed_version") for item in vulnerabilities if item.get("fixed_version")])
+    fixed_text = fixed_versions[0] if fixed_versions else "исправленная версия не указана источником; требуется установка актуального security update"
+    title = f"Группа уязвимостей пакета {package_name}"
+    description = (
+        f"В пакете {package_name} выявлено {len(vulnerabilities)} CVE. "
+        f"Максимальная критичность: {group.get('severity_max', 'info')}. "
+        f"Ключевые CVE: {', '.join(cve_ids) if cve_ids else 'перечень доступен в passport_registry.html'}."
+    )
+    verification = _verification_steps(group) or [
+        {
+            "command": "repeat Wazuh vulnerability scan",
+            "expected_result": "повторное сканирование Wazuh Vulnerability Detection не выявляет CVE по данному пакету",
+            "manual": True,
+            "requires_root": False,
+            "safe_to_run": True,
+            "notes": "",
+        }
+    ]
+    passport = {
+        "passport_id": stable_id("VP-PKG-GRP", group.get("group_id"), package_name, asset_name),
+        "passport_type": "software_group",
+        "finding_refs": list(group.get("affected_findings", [])),
+        "raw_refs": [],
+        "title_ru": title,
+        "title_en": f"Vulnerability group for package {package_name}",
+        "vulnerability_class": "уязвимость кода",
+        "weakness_type": NO_SOURCE,
+        "object": asset_name,
+        "asset": asset_name,
+        "component": package_name,
+        "software_name": package_name,
+        "software_version": _text(package.get("version")),
+        "fixed_version": fixed_text,
+        "architecture": _text(package.get("architecture")),
+        "os": os_name,
+        "platform": platform,
+        "location": "установленный пакет",
+        "detection_method": "Wazuh Vulnerability Detection, агрегация CVE по пакету",
+        "source": "Wazuh Vulnerability Detection",
+        "actual_state": f"Установлен пакет {package_name} версии {package.get('version')}",
+        "expected_state": f"Пакет обновлен до исправленной версии или актуального security update: {fixed_text}",
+        "expected_state_human": f"Пакет обновлен до исправленной версии или актуального security update: {fixed_text}",
+        "expected_state_raw": ", ".join(fixed_versions) if fixed_versions else NO_SOURCE,
+        "description": limit_summary_text(description, 700),
+        "description_short": limit_summary_text(description, 700),
+        "description_full": description,
+        "conditions": "Полный перечень CVE и условий сканера доступен в passport_registry.html.",
+        "severity": _text(group.get("severity_max"), "info"),
+        "priority": _text(group.get("priority"), "P4"),
+        "cvss_score": max_cvss if max_cvss not in (None, "") else NO_SOURCE,
+        "cvss_vector": NO_SOURCE,
+        "external_ids": {"cve": cve_ids, "cve_count": len(vulnerabilities)},
+        "consequences": "снижение защищенности хоста из-за группы уязвимостей установленного программного компонента",
+        "security_impact": "снижение защищенности хоста из-за группы уязвимостей установленного программного компонента",
+        "remediation_summary": "Обновить пакет до исправленной версии или актуального security update; для ядра выполнить перезагрузку при необходимости",
+        "remediation_steps": list(group.get("commands", [])) or [f"Обновить пакет {package_name} штатным пакетным менеджером ОС"],
+        "verification_steps": verification,
+        "status": "fail",
+        "detected_at": NO_SOURCE,
+        "references": [],
+        "linked_checks": [],
+    }
+    required = [
+        "passport_id", "title_ru", "vulnerability_class", "asset", "component", "location", "detection_method",
+        "severity", "remediation_summary", "verification_steps", "source", "status", "external_ids",
+        "software_name", "software_version",
+    ]
+    extended = ["fixed_version", "cvss_score", "description_full"]
+    return _finalize(passport, required, extended)
 
 
 def build_vulnerability_passports(
@@ -303,6 +507,9 @@ def build_vulnerability_passports(
 ) -> list[dict[str, Any]]:
     finding_by_uid = {item.get("finding_uid"): item for item in findings if item.get("finding_uid")}
     passports: list[dict[str, Any]] = []
+    for group in remediation_groups:
+        if group.get("action_type") == "package_update":
+            passports.append(_package_group_passport(group, assets))
     for finding in findings:
         if finding.get("type") == "software_vulnerability":
             passports.append(_package_passport(finding, assets))
@@ -363,18 +570,35 @@ def select_summary_passports(
     if str(options.get("passport_scope") or "top") == "all":
         return passports
     max_items = int(options.get("max_summary_passports") or 25)
+    max_software = int(options.get("max_summary_software_passports") or 10)
+    max_cve_per_package = int(options.get("max_summary_cve_per_package") or 5)
     min_priority = str(options.get("min_passport_priority") or "P2").upper()
     include_low = bool(options.get("include_low", False))
     include_info = bool(options.get("include_info", False))
     top_refs = {ref for group in remediation_plan[: max_items] for ref in group.get("passport_refs", [])}
     threshold = PRIORITY_ORDER.get(min_priority, PRIORITY_ORDER["P2"])
+    strong_packages = {
+        str(passport.get("component") or passport.get("software_name") or "")
+        for passport in passports
+        if passport.get("passport_type") == "software" and str(passport.get("severity") or "").lower() in {"critical", "high"}
+    }
+    software_count = 0
+    cve_per_package: Counter[str] = Counter()
 
     selected = []
     for passport in passports:
+        passport_type = passport.get("passport_type")
         severity = str(passport.get("severity") or "info").lower()
-        if passport.get("passport_type") == "software" and severity == "low" and not include_low:
+        package_name = str(passport.get("component") or passport.get("software_name") or "")
+        if passport_type in {"software", "software_group"} and software_count >= max_software:
             continue
-        if passport.get("passport_type") == "software" and severity == "info" and not include_info:
+        if passport_type == "software" and cve_per_package[package_name] >= max_cve_per_package:
+            continue
+        if passport_type == "software" and severity == "medium" and package_name in strong_packages:
+            continue
+        if passport_type == "software" and severity == "low" and not include_low:
+            continue
+        if passport_type == "software" and severity == "info" and not include_info:
             continue
         if severity == "low" and not include_low and passport.get("passport_id") not in top_refs:
             continue
@@ -382,7 +606,11 @@ def select_summary_passports(
             continue
         if passport.get("passport_id") in top_refs or severity in {"critical", "high"} or PRIORITY_ORDER.get(str(passport.get("priority", "P4")).upper(), 0) >= threshold:
             selected.append(passport)
-        if len(selected) >= max_items:
+            if passport_type in {"software", "software_group"}:
+                software_count += 1
+            if passport_type == "software":
+                cve_per_package[package_name] += 1
+        if len(selected) >= max_items and software_count >= max_software:
             break
     return selected
 
