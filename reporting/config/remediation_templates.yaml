@@ -1,0 +1,27 @@
+package_update:
+  commands:
+    - "sudo apt update"
+    - "sudo apt install --only-upgrade {packages}"
+  verification:
+    - "apt list --upgradable"
+    - "dpkg -l | grep -E '{package_pattern}'"
+    - "repeat Wazuh vulnerability scan"
+  rollback: "Use package manager history or restore from snapshot if update causes regression"
+mount_options:
+  verification:
+    - "findmnt -kn {mountpoint}"
+    - "grep {mountpoint} /etc/fstab"
+audit:
+  verification:
+    - "auditctl -s"
+    - "augenrules --check"
+    - "augenrules --load"
+logging:
+  verification:
+    - "systemctl status systemd-journald"
+    - "journalctl --disk-usage"
+    - "systemd-analyze cat-config systemd/journald.conf"
+kernel:
+  verification:
+    - "modprobe -n -v {module}"
+    - "lsmod | grep {module}"

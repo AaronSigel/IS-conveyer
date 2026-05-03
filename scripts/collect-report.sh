@@ -49,6 +49,10 @@ if [[ -n "${OUTPUT_DIR}" ]]; then
   RAW_ALERTS_PATH="${OUTPUT_DIR}/raw/wazuh-sca.json"
   RAW_VULNS_PATH="${OUTPUT_DIR}/raw/wazuh-vulnerabilities.json"
   REPORT_PATH="${OUTPUT_DIR}/draft-report.md"
+  NORMALIZED_REPORT_PATH="${OUTPUT_DIR}/normalized_report.json"
+  TECHNICAL_HTML_PATH="${OUTPUT_DIR}/technical_report.html"
+  TECHNICAL_PDF_PATH="${OUTPUT_DIR}/technical_report.pdf"
+  SPLIT_REPORTS_DIR="${OUTPUT_DIR}/reports"
 elif [[ -n "${OUTPUT_PREFIX}" ]]; then
   NORMALIZED_PREFIX="${OUTPUT_PREFIX#-}"
   NORMALIZED_PREFIX="${NORMALIZED_PREFIX%-}"
@@ -60,11 +64,19 @@ elif [[ -n "${OUTPUT_PREFIX}" ]]; then
   RAW_ALERTS_PATH="${ARTIFACTS_DIR}/${NORMALIZED_PREFIX}-raw-wazuh-alerts.json"
   RAW_VULNS_PATH="${ARTIFACTS_DIR}/${NORMALIZED_PREFIX}-raw-wazuh-vulnerabilities.json"
   REPORT_PATH="${ARTIFACTS_DIR}/${NORMALIZED_PREFIX}-draft-report.md"
+  NORMALIZED_REPORT_PATH="${ARTIFACTS_DIR}/${NORMALIZED_PREFIX}-normalized_report.json"
+  TECHNICAL_HTML_PATH="${ARTIFACTS_DIR}/${NORMALIZED_PREFIX}-technical_report.html"
+  TECHNICAL_PDF_PATH="${ARTIFACTS_DIR}/${NORMALIZED_PREFIX}-technical_report.pdf"
+  SPLIT_REPORTS_DIR=""
 else
   UNIFIED_PATH="${ARTIFACTS_DIR}/unified-findings.json"
   RAW_ALERTS_PATH="${ARTIFACTS_DIR}/raw-wazuh-alerts.json"
   RAW_VULNS_PATH="${ARTIFACTS_DIR}/raw-wazuh-vulnerabilities.json"
   REPORT_PATH="${ARTIFACTS_DIR}/draft-report.md"
+  NORMALIZED_REPORT_PATH="${ARTIFACTS_DIR}/normalized_report.json"
+  TECHNICAL_HTML_PATH="${ARTIFACTS_DIR}/technical_report.html"
+  TECHNICAL_PDF_PATH="${ARTIFACTS_DIR}/technical_report.pdf"
+  SPLIT_REPORTS_DIR=""
 fi
 
 cd "${PROJECT_ROOT}"
@@ -79,13 +91,28 @@ if [[ -n "${OUTPUT_DIR}" ]]; then
   cp "${RAW_ALERTS_PATH}" "${OUTPUT_DIR}/raw/syscollector-packages.json"
 fi
 
-python3 scripts/generate-report.py \
-  --findings "${UNIFIED_PATH}" \
-  --profile profiles/cis_ubuntu24-04.yml \
-  --metadata config/report-metadata.yml \
+generate_args=(
+  --findings "${UNIFIED_PATH}"
+  --profile profiles/cis_ubuntu24-04.yml
+  --metadata config/report-metadata.yml
   --output "${REPORT_PATH}"
+  --normalized-output "${NORMALIZED_REPORT_PATH}"
+  --html-output "${TECHNICAL_HTML_PATH}"
+  --pdf-output "${TECHNICAL_PDF_PATH}"
+)
+if [[ -n "${SPLIT_REPORTS_DIR}" ]]; then
+  generate_args+=(--split-output-dir "${SPLIT_REPORTS_DIR}")
+fi
+
+python3 scripts/generate-report.py "${generate_args[@]}"
 
 echo "unified findings: ${UNIFIED_PATH}"
 echo "raw alerts: ${RAW_ALERTS_PATH}"
 echo "raw vulnerabilities: ${RAW_VULNS_PATH}"
-echo "report: ${REPORT_PATH}"
+echo "normalized report: ${NORMALIZED_REPORT_PATH}"
+echo "technical html: ${TECHNICAL_HTML_PATH}"
+echo "technical pdf: ${TECHNICAL_PDF_PATH}"
+echo "legacy report path: ${REPORT_PATH}"
+if [[ -n "${SPLIT_REPORTS_DIR}" ]]; then
+  echo "split reports: ${SPLIT_REPORTS_DIR}"
+fi

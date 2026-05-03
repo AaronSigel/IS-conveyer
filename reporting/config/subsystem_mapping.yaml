@@ -1,0 +1,32 @@
+filesystem:
+  - "/tmp"
+  - "/var"
+  - "/home"
+  - "mount"
+  - "nodev"
+  - "nosuid"
+  - "noexec"
+  - "findmnt"
+audit:
+  - "auditd"
+  - "auditctl"
+  - "/etc/audit"
+  - "audit configuration"
+  - "augenrules"
+logging:
+  - "journald"
+  - "rsyslog"
+  - "journalctl"
+  - "systemd-journald"
+kernel:
+  - "kernel modules"
+  - "kernel module"
+  - "modprobe"
+  - "lsmod"
+  - "sysctl"
+access_control:
+  - "pam"
+  - "password"
+  - "sudo"
+  - "ssh"
+  - "cron"

@@ -95,7 +95,10 @@ def create_run(hosts: list[str], create_default_export: bool = True) -> dict[str
         "profile": PROFILE_ID,
         "created_from_ui": True,
         "create_default_export": create_default_export,
-        "default_export_filters": {"status": {"op": "in", "value": ["fail"]}},
+        "default_export_filters": {
+            "finding_type": {"op": "eq", "value": "software_vulnerability"},
+            "status": {"op": "in", "value": ["fail"]},
+        },
     }
     metadata = {
         "id": run_id,

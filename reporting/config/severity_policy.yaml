@@ -1,0 +1,5 @@
+priority:
+  P1: "Critical, or High with exposure, privilege escalation, remote attack, or system component impact"
+  P2: "High without clear exposure, or Medium affecting kernel, auth, crypto, or audit"
+  P3: "Medium/Low hardening and local baseline issues"
+  P4: "Info, unscored, missing severity, or under evaluation"

@@ -107,6 +107,18 @@
         },
         "protocol": {
           "type": ["string", "null"]
+        },
+        "architecture": {
+          "type": ["string", "null"]
+        },
+        "description": {
+          "type": ["string", "null"]
+        },
+        "size": {
+          "type": ["integer", "number", "null"]
+        },
+        "type": {
+          "type": ["string", "null"]
         }
       },
       "additionalProperties": true
@@ -140,6 +152,12 @@
     },
     "cve": {
       "type": ["string", "null"]
+    },
+    "references": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
     },
     "sca_check_id": {
       "type": ["integer", "string", "null"]
@@ -182,6 +200,34 @@
         },
         "condition": {
           "type": ["string", "null"]
+        }
+      },
+      "additionalProperties": true
+    },
+    "wazuh_vulnerability": {
+      "type": "object",
+      "properties": {
+        "_index": {
+          "type": ["string", "null"]
+        },
+        "_id": {
+          "type": ["string", "null"]
+        },
+        "agent": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "host": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "package": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "vulnerability": {
+          "type": "object",
+          "additionalProperties": true
         }
       },
       "additionalProperties": true

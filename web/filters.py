@@ -5,32 +5,33 @@ from typing import Any
 SEVERITY_ORDER = {"info": 0, "low": 1, "medium": 2, "high": 3, "critical": 4}
 
 PRESETS = {
-    "all": ("Все findings", {}),
-    "failed": ("Только failed", {"status": {"op": "in", "value": ["fail"]}}),
-    "severity_medium": ("Severity: Medium", {"severity": {"op": "eq", "value": "medium"}}),
-    "severity_gte_high": ("Severity >= High", {"severity": {"op": "gte", "value": "high"}}),
-    "cvss_gte_5": ("CVSS base >= 5.0", {"cvss_base_score": {"op": "gte", "value": 5.0, "include_missing": True}}),
-    "failed_severity_gte_high": (
-        "Failed + Severity >= High",
-        {"status": {"op": "in", "value": ["fail"]}, "severity": {"op": "gte", "value": "high"}},
+    "all_vulnerability": (
+        "All vulnerability",
+        {"finding_type": {"op": "eq", "value": "software_vulnerability"}},
     ),
-    "failed_cvss_gte_5": (
-        "Failed + CVSS base >= 5.0",
-        {"status": {"op": "in", "value": ["fail"]}, "cvss_base_score": {"op": "gte", "value": 5.0, "include_missing": True}},
+    "fail_vulnerability": (
+        "Fail vulnerability",
+        {
+            "finding_type": {"op": "eq", "value": "software_vulnerability"},
+            "status": {"op": "in", "value": ["fail"]},
+        },
     ),
-    "sca": ("Только SCA configuration checks", {"source": {"op": "contains", "value": "sca"}}),
-    "vulnerabilities": ("Только package vulnerabilities", {"source": {"op": "contains", "value": "vulnerab"}}),
 }
 
 
 def normalize_finding(item: dict[str, Any]) -> dict[str, Any]:
     finding = dict(item)
+    wazuh_vulnerability = finding.get("wazuh_vulnerability") if isinstance(finding.get("wazuh_vulnerability"), dict) else {}
+    wazuh_package = wazuh_vulnerability.get("package") if isinstance(wazuh_vulnerability.get("package"), dict) else {}
+    wazuh_vuln = wazuh_vulnerability.get("vulnerability") if isinstance(wazuh_vulnerability.get("vulnerability"), dict) else {}
     source = str(finding.get("source") or "")
     rule_id = str(finding.get("rule_id") or "")
     evidence = finding.get("evidence") if isinstance(finding.get("evidence"), list) else []
     cvss = finding.get("cvss_base_score")
     if cvss is None and isinstance(finding.get("cvss"), dict):
         cvss = finding["cvss"].get("base_score")
+    if cvss is None and isinstance(wazuh_vuln.get("score"), dict):
+        cvss = wazuh_vuln["score"].get("base")
     if cvss is None:
         for value in evidence:
             match = re.search(r"CVSS base:\s*([0-9]+(?:\.[0-9]+)?)", str(value), re.I)
@@ -39,12 +40,16 @@ def normalize_finding(item: dict[str, Any]) -> dict[str, Any]:
                 break
     cve = finding.get("cve")
     if not cve:
+        cve = wazuh_vuln.get("id")
+    if not cve:
         match = re.search(r"(CVE-\d{4}-\d+)", rule_id + " " + " ".join(map(str, evidence)), re.I)
         cve = match.group(1).upper() if match else None
     package = finding.get("package")
     if not package and isinstance(finding.get("affected_component"), dict):
         component = finding["affected_component"]
         package = component.get("package") or component.get("name")
+    if not package:
+        package = wazuh_package.get("name")
     if not package:
         if ":" in rule_id and rule_id.upper().startswith("CVE-"):
             package = rule_id.split(":", 1)[1]
@@ -62,6 +67,8 @@ def normalize_finding(item: dict[str, Any]) -> dict[str, Any]:
     finding_type = str(finding.get("finding_type") or "").lower()
     if not finding_type and ("vulnerab" in source.lower() or str(finding.get("category") or "").lower() == "vulnerability"):
         finding_type = "software_vulnerability"
+    if not finding_type:
+        finding_type = "configuration_noncompliance"
     if finding_type == "software_vulnerability" and cvss is not None:
         score = float(cvss)
         if score >= 9.0:
@@ -83,9 +90,11 @@ def normalize_finding(item: dict[str, Any]) -> dict[str, Any]:
             "title": str(finding.get("title") or ""),
             "status": str(finding.get("status") or "").lower(),
             "severity": severity,
+            "finding_type": finding_type,
             "cvss_base_score": cvss,
             "cve": cve,
             "package": package,
+            "detected_at": finding.get("detected_at") or wazuh_vuln.get("detected_at"),
             "evidence": evidence,
             "remediation": str(finding.get("remediation") or ""),
         }
@@ -144,25 +153,4 @@ def filters_from_form(form: dict[str, Any]) -> dict[str, Any]:
     preset = form.get("preset")
     if preset and preset in PRESETS:
         return dict(PRESETS[preset][1])
-    filters: dict[str, Any] = {}
-    for field in ("status", "host"):
-        if form.get(field):
-            filters[field] = {"op": "in", "value": scalar_list(form.get(field))}
-    for field in ("source", "category", "rule_id", "cve", "package"):
-        if form.get(field):
-            filters[field] = {"op": "contains", "value": form.get(field)}
-    if form.get("title_contains"):
-        filters["title"] = {"op": "contains", "value": form.get("title_contains")}
-    if form.get("severity"):
-        filters["severity"] = {"op": "gte" if form.get("severity_mode") == "gte" else "eq", "value": form.get("severity")}
-    cvss_op = form.get("cvss_op")
-    include_missing = form.get("include_missing_cvss") == "on"
-    if cvss_op in {"gte", "lte"} and form.get("cvss_value"):
-        filters["cvss_base_score"] = {"op": cvss_op, "value": float(form.get("cvss_value")), "include_missing": include_missing}
-    if cvss_op == "between" and form.get("cvss_min") and form.get("cvss_max"):
-        filters["cvss_base_score"] = {
-            "op": "between",
-            "value": [float(form.get("cvss_min")), float(form.get("cvss_max"))],
-            "include_missing": include_missing,
-        }
-    return filters
+    return dict(PRESETS["all_vulnerability"][1])

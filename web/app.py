@@ -105,8 +105,9 @@ async def report_preview(run_id: str, request: Request):
 @app.post("/reports/{run_id}/exports")
 async def report_export(run_id: str, request: Request):
     form = dict(await request.form())
-    title = str(form.get("title") or "Filtered report")
-    export = await run_in_threadpool(create_export, run_id, title, filters_from_form(form))
+    title = str(form.get("title") or "Split reports")
+    report_mode = str(form.get("report_mode") or "split")
+    export = await run_in_threadpool(create_export, run_id, title, filters_from_form(form), None, report_mode)
     return RedirectResponse(f"/reports/{run_id}/exports/{export['id']}", status_code=303)
 
 
@@ -120,12 +121,42 @@ def export_detail(request: Request, run_id: str, export_id: str):
 @app.get("/reports/{run_id}/exports/{export_id}/html")
 def export_html(run_id: str, export_id: str):
     runs.validate_component(export_id, "export id")
-    path = runs.run_dir(run_id) / "exports" / export_id / "report.html"
+    export = runs.read_json(runs.run_dir(run_id) / "exports" / export_id / "export.json", {})
+    filename = (export.get("files") or {}).get("html", "technical_report.html")
+    path = runs.run_dir(run_id) / "exports" / export_id / filename
     return FileResponse(path, media_type="text/html", filename=f"{run_id}-{export_id}.html")
 
 
 @app.get("/reports/{run_id}/exports/{export_id}/pdf")
 def export_pdf(run_id: str, export_id: str):
     runs.validate_component(export_id, "export id")
-    path = runs.run_dir(run_id) / "exports" / export_id / "report.pdf"
+    export = runs.read_json(runs.run_dir(run_id) / "exports" / export_id / "export.json", {})
+    filename = (export.get("files") or {}).get("pdf", "technical_report.pdf")
+    path = runs.run_dir(run_id) / "exports" / export_id / filename
     return FileResponse(path, media_type="application/pdf", filename=f"{run_id}-{export_id}.pdf")
+
+
+@app.get("/reports/{run_id}/exports/{export_id}/{report_id}/html")
+def export_report_html(run_id: str, export_id: str, report_id: str):
+    runs.validate_component(export_id, "export id")
+    runs.validate_component(report_id, "report id")
+    export = runs.read_json(runs.run_dir(run_id) / "exports" / export_id / "export.json", {})
+    report = (export.get("reports") or {}).get(report_id, {})
+    filename = (report.get("files") or {}).get("html")
+    if not filename:
+        return PlainTextResponse("Report HTML file not found", status_code=404)
+    path = runs.run_dir(run_id) / "exports" / export_id / filename
+    return FileResponse(path, media_type="text/html", filename=f"{run_id}-{export_id}-{report_id}.html")
+
+
+@app.get("/reports/{run_id}/exports/{export_id}/{report_id}/pdf")
+def export_report_pdf(run_id: str, export_id: str, report_id: str):
+    runs.validate_component(export_id, "export id")
+    runs.validate_component(report_id, "report id")
+    export = runs.read_json(runs.run_dir(run_id) / "exports" / export_id / "export.json", {})
+    report = (export.get("reports") or {}).get(report_id, {})
+    filename = (report.get("files") or {}).get("pdf")
+    if not filename:
+        return PlainTextResponse("Report PDF file not found", status_code=404)
+    path = runs.run_dir(run_id) / "exports" / export_id / filename
+    return FileResponse(path, media_type="application/pdf", filename=f"{run_id}-{export_id}-{report_id}.pdf")

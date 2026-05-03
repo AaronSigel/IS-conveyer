@@ -4,6 +4,11 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from reporting import build_normalized_report
+from reporting.renderers import render_pdf as render_technical_pdf
+from reporting.renderers import render_json as render_technical_json
+from reporting.renderers.html_renderer import render_html_string as render_technical_html_string
+
 try:
     from fastapi.templating import Jinja2Templates
 except ModuleNotFoundError:
@@ -52,6 +57,43 @@ def summary_for(findings: list[dict[str, Any]]) -> dict[str, int]:
     return runs.summarize_findings(findings)
 
 
+def _with_filter(filters: dict[str, Any], field: str, spec: dict[str, Any]) -> dict[str, Any]:
+    merged = dict(filters)
+    merged[field] = spec
+    return merged
+
+
+def split_report_specs(base_filters: dict[str, Any], hosts: list[str]) -> dict[str, dict[str, Any]]:
+    specs: dict[str, dict[str, Any]] = {}
+    status_filter = base_filters.get("status")
+    for host in hosts:
+        safe_host = slugify(host)
+        host_filter = {"host": {"op": "eq", "value": host}}
+        configuration = {
+            "finding_type": {"op": "eq", "value": "configuration_noncompliance"},
+            **host_filter,
+        }
+        if status_filter:
+            configuration["status"] = status_filter
+        packages = _with_filter(dict(base_filters), "host", {"op": "eq", "value": host})
+        packages["finding_type"] = {"op": "eq", "value": "software_vulnerability"}
+        specs[f"{safe_host}-configuration"] = {
+            "title": f"{host} - Configuration report",
+            "html": f"{safe_host}-configuration-report.html",
+            "pdf": f"{safe_host}-configuration-report.pdf",
+            "json": f"{safe_host}-configuration-normalized_report.json",
+            "filters": configuration,
+        }
+        specs[f"{safe_host}-packages"] = {
+            "title": f"{host} - Package vulnerability report",
+            "html": f"{safe_host}-packages-report.html",
+            "pdf": f"{safe_host}-packages-report.pdf",
+            "json": f"{safe_host}-packages-normalized_report.json",
+            "filters": packages,
+        }
+    return specs
+
+
 def human_filter_text(filters: dict[str, Any]) -> str:
     if not filters:
         return "Фильтры отчёта не применялись. В отчёт включены все результаты проверки."
@@ -66,6 +108,7 @@ def human_filter_text(filters: dict[str, Any]) -> str:
         "cve": "CVE",
         "package": "пакет",
         "cvss_base_score": "CVSS",
+        "finding_type": "тип finding",
     }
     ops = {"in": "=", "eq": "=", "contains": "содержит", "gte": ">=", "lte": "<=", "between": "между"}
     parts = []
@@ -81,29 +124,122 @@ def human_filter_text(filters: dict[str, Any]) -> str:
     return "Применённые фильтры: " + "; ".join(parts) + "."
 
 
-def create_export(run_id: str, title: str, filters: dict[str, Any], export_id: str | None = None) -> dict[str, Any]:
+def create_export(
+    run_id: str,
+    title: str,
+    filters: dict[str, Any],
+    export_id: str | None = None,
+    report_mode: str = "combined",
+) -> dict[str, Any]:
     metadata = runs.load_metadata(run_id)
     source_findings = normalize_findings(runs.load_findings(run_id))
-    filtered = apply_filters(source_findings, filters)
     export_id = unique_export_id(run_id, export_id or title)
     export_dir = runs.run_dir(run_id) / "exports" / export_id
     export_dir.mkdir(parents=True, exist_ok=False)
+    pdf_errors: list[str] = []
+    if report_mode == "split":
+        reports = {}
+        total_after_filter = 0
+        combined_summary = runs.empty_summary()
+        hosts = [str(host) for host in metadata.get("hosts") or []]
+        if not hosts:
+            hosts = sorted({str(item.get("host")) for item in source_findings if item.get("host")})
+        for report_id, spec in split_report_specs(filters, hosts).items():
+            report_filters = spec["filters"]
+            filtered = apply_filters(source_findings, report_filters)
+            normalized_report = build_normalized_report(
+                source_findings,
+                filtered_findings=filtered,
+                metadata=metadata,
+                profile=metadata.get("profile_id"),
+                report_id=report_id,
+            )
+            report_export = {
+                "id": report_id,
+                "title": spec["title"],
+                "created_at": runs.now_iso(),
+                "filters": report_filters,
+                "result_summary": {
+                    "total_findings_before_filter": len(source_findings),
+                    "total_findings_after_filter": len(filtered),
+                    **summary_for(filtered),
+                },
+            }
+            html_path = export_dir / spec["html"]
+            pdf_path = export_dir / spec["pdf"]
+            json_path = export_dir / spec["json"]
+            render_technical_json(normalized_report, json_path)
+            html_path.write_text(render_technical_html_string(normalized_report), encoding="utf-8")
+            try:
+                render_pdf(html_path, pdf_path)
+            except Exception as exc:
+                pdf_errors.append(f"{report_id}: {exc}")
+            files = {"html": spec["html"], "json": spec["json"]}
+            if pdf_path.exists():
+                files["pdf"] = spec["pdf"]
+            reports[report_id] = {
+                "id": report_id,
+                "title": spec["title"],
+                "filters": report_filters,
+                "result_summary": report_export["result_summary"],
+                "files": files,
+            }
+            total_after_filter += len(filtered)
+            for key, value in summary_for(filtered).items():
+                combined_summary[key] = combined_summary.get(key, 0) + value
+        export = {
+            "id": export_id,
+            "title": title,
+            "created_at": runs.now_iso(),
+            "formats": ["json", "html", "pdf"] if not pdf_errors else ["json", "html"],
+            "mode": "split",
+            "filters": filters,
+            "result_summary": {
+                "total_findings_before_filter": len(source_findings),
+                "total_findings_after_filter": total_after_filter,
+                **combined_summary,
+            },
+            "reports": reports,
+        }
+        if pdf_errors:
+            export["pdf_errors"] = pdf_errors
+        runs.write_json(export_dir / "export.json", export)
+        exports = [item for item in runs.list_exports(run_id) if item.get("id") != export_id]
+        exports.append(export)
+        runs.save_exports_index(run_id, sorted(exports, key=lambda item: item.get("created_at", ""), reverse=True))
+        return export
+
+    filtered = apply_filters(source_findings, filters)
+    normalized_report = build_normalized_report(
+        source_findings,
+        filtered_findings=filtered,
+        metadata=metadata,
+        profile=metadata.get("profile_id"),
+        report_id=export_id,
+    )
     export = {
         "id": export_id,
         "title": title,
         "created_at": runs.now_iso(),
-        "formats": ["html", "pdf"],
+        "formats": ["json", "html", "pdf"],
         "filters": filters,
         "result_summary": {
             "total_findings_before_filter": len(source_findings),
             "total_findings_after_filter": len(filtered),
             **summary_for(filtered),
         },
-        "files": {"html": "report.html", "pdf": "report.pdf"},
+        "files": {"json": "normalized_report.json", "html": "technical_report.html", "pdf": "technical_report.pdf"},
     }
-    html_path = export_dir / "report.html"
-    html_path.write_text(render_report_html(metadata, export, source_findings, filtered), encoding="utf-8")
-    render_pdf(html_path, export_dir / "report.pdf")
+    render_technical_json(normalized_report, export_dir / "normalized_report.json")
+    html_path = export_dir / "technical_report.html"
+    html_path.write_text(render_technical_html_string(normalized_report), encoding="utf-8")
+    pdf_path = export_dir / "technical_report.pdf"
+    try:
+        render_pdf(html_path, pdf_path)
+    except Exception as exc:
+        export["formats"] = ["json", "html"]
+        export["files"].pop("pdf", None)
+        export["pdf_errors"] = [str(exc)]
     runs.write_json(export_dir / "export.json", export)
     exports = [item for item in runs.list_exports(run_id) if item.get("id") != export_id]
     exports.append(export)
@@ -135,16 +271,4 @@ def render_report_html(
 
 
 def render_pdf(html_path: Path, pdf_path: Path) -> None:
-    from playwright.sync_api import sync_playwright
-
-    with sync_playwright() as playwright:
-        browser = playwright.chromium.launch()
-        page = browser.new_page()
-        page.goto(html_path.resolve().as_uri(), wait_until="networkidle")
-        page.pdf(
-            path=str(pdf_path),
-            format="A4",
-            print_background=True,
-            margin={"top": "14mm", "right": "14mm", "bottom": "14mm", "left": "14mm"},
-        )
-        browser.close()
+    render_technical_pdf(html_path, pdf_path)

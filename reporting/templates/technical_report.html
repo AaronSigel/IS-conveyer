@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <title>Технический отчёт {{ report.report_id }}</title>
+  <style>{% include "technical_report.css" %}</style>
+</head>
+<body>
+<main>
+  <h1>Технический отчёт по результатам проверки Wazuh</h1>
+  <p class="muted">{{ report.report_id }} · {{ report.generated_at }}</p>
+
+  <h2>1. Сводка запуска</h2>
+  <table>
+    <tbody>
+      <tr><th>Run ID</th><td>{{ report.run.run_id }}</td></tr>
+      <tr><th>Статус</th><td>{{ report.run.status }}</td></tr>
+      <tr><th>Профиль</th><td>{{ report.run.profile }}</td></tr>
+      <tr><th>Начало</th><td>{{ report.run.started_at }}</td></tr>
+      <tr><th>Завершение</th><td>{{ report.run.finished_at }}</td></tr>
+    </tbody>
+  </table>
+
+  <h2>2. Инвентаризация активов</h2>
+  <table>
+    <thead>
+      <tr><th>agent.id</th><th>agent.name</th><th>host.os.full</th><th>host.os.version</th><th>host.os.kernel</th><th>agent.version</th><th>total</th><th>software</th><th>configuration</th><th>max severity</th></tr>
+    </thead>
+    <tbody>
+      {% for asset in report.scope.assets %}
+      <tr>
+        <td>{{ asset["agent.id"] }}</td><td>{{ asset["agent.name"] }}</td><td>{{ asset["host.os.full"] }}</td><td>{{ asset["host.os.version"] }}</td><td>{{ asset["host.os.kernel"] }}</td><td>{{ asset["agent.version"] }}</td>
+        <td>{{ asset.findings_total }}</td><td>{{ asset.software_vulnerabilities }}</td><td>{{ asset.configuration_noncompliance }}</td><td>{{ asset.max_severity }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <h2>3. Источники данных и фильтры</h2>
+  <p>Данные получены из Wazuh SCA, Wazuh syscollector и Wazuh Vulnerability Detector. Фильтры применяются к сохранённому unified-findings.json до построения нормализованной модели.</p>
+
+  <h2>4. Агрегированная техническая сводка</h2>
+  <section class="metrics">
+    <div class="metric"><b>Raw findings</b>{{ report.summary.raw_findings }}</div>
+    <div class="metric"><b>Filtered findings</b>{{ report.summary.filtered_findings }}</div>
+    <div class="metric"><b>Unique findings</b>{{ report.summary.unique_findings }}</div>
+    <div class="metric"><b>Remediation groups</b>{{ report.summary.remediation_groups }}</div>
+  </section>
+  <table>
+    <thead><tr><th>Разрез</th><th>Значения</th></tr></thead>
+    <tbody>
+      <tr><td>Severity</td><td>{{ report.summary.by_severity }}</td></tr>
+      <tr><td>Assets</td><td>{{ report.summary.by_asset }}</td></tr>
+      <tr><td>Type</td><td>{{ report.summary.by_type }}</td></tr>
+      <tr><td>Subsystem</td><td>{{ report.summary.by_subsystem }}</td></tr>
+    </tbody>
+  </table>
+
+  <h2>5. План устранения</h2>
+  <table>
+    <thead><tr><th>Priority</th><th>Group</th><th>Severity</th><th>Assets</th><th>Findings</th><th>Summary</th><th>Commands</th><th>Verification</th></tr></thead>
+    <tbody>
+      {% for group in report.remediation_plan %}
+      <tr>
+        <td>{{ group.priority }}</td><td>{{ group.title }}</td><td>{{ group.severity_max }}</td><td>{{ ", ".join(group.affected_assets) }}</td><td>{{ group.affected_findings|length }}</td><td>{{ group.summary }}</td>
+        <td>{% for command in group.commands %}<code>{{ command }}</code><br>{% endfor %}</td>
+        <td>{% for command in group.verification %}<code>{{ command }}</code><br>{% endfor %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <h2>6. Группы пакетных уязвимостей</h2>
+  {% for group in report.remediation_groups if group.action_type == "package_update" %}
+  <article class="card">
+    <h3>{{ group.title }}</h3>
+    <p><b>{{ group.priority }}</b> · {{ group.severity_max }} · {{ ", ".join(group.affected_assets) }}</p>
+    <p>{{ group.summary }}</p>
+  </article>
+  {% else %}
+  <p>Пакетные remediation-группы отсутствуют.</p>
+  {% endfor %}
+
+  <h2>7. Группы конфигурационных несоответствий</h2>
+  {% for group in report.remediation_groups if group.action_type == "config_change" %}
+  <article class="card">
+    <h3>{{ group.title }}</h3>
+    <p><b>{{ group.priority }}</b> · {{ group.severity_max }} · {{ ", ".join(group.affected_assets) }}</p>
+    <p>{{ group.summary }}</p>
+  </article>
+  {% else %}
+  <p>Конфигурационные remediation-группы отсутствуют.</p>
+  {% endfor %}
+
+  <h2>8. Verification checklist</h2>
+  <table>
+    <thead><tr><th>Group</th><th>Commands</th></tr></thead>
+    <tbody>
+      {% for group in report.remediation_plan %}
+      <tr><td>{{ group.title }}</td><td>{% for command in group.verification %}<code>{{ command }}</code><br>{% endfor %}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <h2>9. Исключения / Under evaluation / кандидаты false positive</h2>
+  {% for finding in report.under_evaluation %}
+  <article class="card">
+    <h3>{{ finding.finding_uid }} · {{ finding.title }}</h3>
+    <p>{{ ", ".join(finding.affected_assets) }} · {{ finding.severity.level }}</p>
+  </article>
+  {% else %}
+  <p>Записи без оценки или под ручной проверкой отсутствуют.</p>
+  {% endfor %}
+
+  <h2>10. Детальные карточки findings</h2>
+  {% for finding in report.findings %}
+  <article class="card">
+    <h3>{{ finding.finding_uid }} · {{ finding.title }}</h3>
+    {% if finding.type == "software_vulnerability" %}
+    <table>
+      <tbody>
+        <tr><th>Finding ID</th><td>{{ finding.finding_uid }}</td></tr>
+        <tr><th>CVE</th><td>{{ finding.cve }}</td></tr>
+        <tr><th>Package</th><td>{{ finding.package.name }}</td></tr>
+        <tr><th>Installed versions by asset</th><td>{{ finding.package.installed_versions }}</td></tr>
+        <tr><th>Fixed condition</th><td>{{ finding.package.fixed_condition }}</td></tr>
+        <tr><th>Severity / CVSS</th><td>{{ finding.severity.level }} / {{ finding.severity.score }}</td></tr>
+        <tr><th>Affected assets</th><td>{{ ", ".join(finding.affected_assets) }}</td></tr>
+        <tr><th>Detection source</th><td>{{ finding.detection.source }} · {{ finding.detection.scanner }}</td></tr>
+        <tr><th>Evidence</th><td>{{ finding.evidence }}</td></tr>
+        <tr><th>Remediation</th><td>{{ finding.remediation.summary }}</td></tr>
+        <tr><th>Verification</th><td>{{ finding.remediation.verification }}</td></tr>
+        <tr><th>References</th><td>{{ finding.references }}</td></tr>
+      </tbody>
+    </table>
+    {% else %}
+    <table>
+      <tbody>
+        <tr><th>Finding ID</th><td>{{ finding.finding_uid }}</td></tr>
+        <tr><th>Requirement ID</th><td>{{ finding.requirement.id }}</td></tr>
+        <tr><th>Requirement title</th><td>{{ finding.requirement.title }}</td></tr>
+        <tr><th>Subsystem</th><td>{{ finding.subsystem }}</td></tr>
+        <tr><th>Affected assets</th><td>{{ ", ".join(finding.affected_assets) }}</td></tr>
+        <tr><th>Check command</th><td>{{ finding.check.command }}</td></tr>
+        <tr><th>Expected state</th><td>{{ finding.check.expected }}</td></tr>
+        <tr><th>Actual result</th><td>{{ finding.check.actual }}</td></tr>
+        <tr><th>Security impact</th><td>{{ finding.impact }}</td></tr>
+        <tr><th>Remediation</th><td>{{ finding.remediation.summary }}</td></tr>
+        <tr><th>Verification</th><td>{{ finding.remediation.verification }}</td></tr>
+        <tr><th>References</th><td>{{ finding.references }}</td></tr>
+      </tbody>
+    </table>
+    {% endif %}
+  </article>
+  {% else %}
+  <p>Основные findings отсутствуют.</p>
+  {% endfor %}
+
+  <h2>Appendix A. Raw Wazuh fields</h2>
+  <pre>{{ report.raw_refs|json }}</pre>
+
+  <h2>Appendix B. Full normalized JSON</h2>
+  <pre>{{ report|json }}</pre>
+
+  <h2>Appendix C. Rule and scanner metadata</h2>
+  <p>Scanner metadata is preserved in detection fields and raw references.</p>
+</main>
+</body>
+</html>

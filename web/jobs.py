@@ -90,7 +90,16 @@ def _run_scan(run_id: str, hosts: list[str], create_default_export: bool) -> Non
             returncode = process.wait()
         metadata = runs.finish_run(run_id, returncode)
         if metadata["status"] == "succeeded" and create_default_export:
-            create_export(run_id, "Default failed findings", {"status": {"op": "in", "value": ["fail"]}}, export_id="default")
+            create_export(
+                run_id,
+                "Default vulnerability reports",
+                {
+                    "finding_type": {"op": "eq", "value": "software_vulnerability"},
+                    "status": {"op": "in", "value": ["fail"]},
+                },
+                export_id="default",
+                report_mode="split",
+            )
     except Exception as exc:
         with (path / "logs.txt").open("a", encoding="utf-8") as log:
             log.write(f"\nUI job failed: {exc}\n")

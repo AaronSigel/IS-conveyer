@@ -130,8 +130,67 @@
     },
     "affected_component": {
       "package": "sudo",
-      "version": "1.9.15p5-3ubuntu5"
+      "version": "1.9.15p5-3ubuntu5",
+      "architecture": "amd64",
+      "description": "Provide limited super user privileges to specific users",
+      "size": 1111111,
+      "type": "deb"
     },
-    "detected_at": "2026-04-30T20:00:00+03:00"
+    "detected_at": "2026-04-30T20:00:00+03:00",
+    "references": [
+      "https://ubuntu.com/security/CVE-2025-32463",
+      "https://cti.wazuh.com/vulnerabilities/cves/CVE-2025-32463"
+    ],
+    "wazuh_vulnerability": {
+      "_index": "wazuh-states-vulnerabilities-wazuh",
+      "_id": "001_sample_CVE-2025-32463_1",
+      "agent": {
+        "id": "001",
+        "name": "target1",
+        "type": "Wazuh",
+        "version": "v4.14.5"
+      },
+      "host": {
+        "os": {
+          "full": "Ubuntu 24.04.4 LTS (Noble Numbat)",
+          "kernel": "6.8.0-106-generic",
+          "name": "Ubuntu",
+          "platform": "ubuntu",
+          "type": "ubuntu",
+          "version": "24.04.4"
+        }
+      },
+      "package": {
+        "architecture": "amd64",
+        "description": "Provide limited super user privileges to specific users",
+        "name": "sudo",
+        "size": 1111111,
+        "type": "deb",
+        "version": "1.9.15p5-3ubuntu5"
+      },
+      "vulnerability": {
+        "category": "Packages",
+        "classification": "-",
+        "description": "Sudo chroot option local privilege escalation.",
+        "detected_at": "2026-04-30T20:00:00+03:00",
+        "enumeration": "CVE",
+        "id": "CVE-2025-32463",
+        "published_at": "2025-06-30T10:00:00Z",
+        "reference": "https://ubuntu.com/security/CVE-2025-32463, https://www.cve.org/CVERecord?id=CVE-2025-32463",
+        "scanner": {
+          "condition": "Package less than 1.9.15p5-3ubuntu5.24.04.1",
+          "reference": "https://cti.wazuh.com/vulnerabilities/cves/CVE-2025-32463",
+          "source": "Canonical Security Tracker",
+          "vendor": "Wazuh"
+        },
+        "score": {
+          "base": 9.3,
+          "version": "3.1",
+          "vector": "CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:C/C:H/I:H/A:H"
+        },
+        "severity": "Critical",
+        "under_evaluation": false
+      }
+    }
   }
 ]

@@ -7,8 +7,12 @@
     <p>{{ export.id }} · {{ export.created_at }}</p>
   </div>
   <div class="actions">
+    {% if not export.reports %}
     <a class="button primary" href="/reports/{{ run_id }}/exports/{{ export.id }}/html">HTML</a>
+    {% if export.files and export.files.pdf %}
     <a class="button" href="/reports/{{ run_id }}/exports/{{ export.id }}/pdf">PDF</a>
+    {% endif %}
+    {% endif %}
   </div>
 </section>
 <section class="metrics">
@@ -21,4 +25,29 @@
   <h2>Параметры</h2>
   <pre class="preview">{{ export.filters }}</pre>
 </section>
+{% if export.reports %}
+<section class="panel">
+  <h2>Отчёты</h2>
+  <div class="cards">
+    {% for report_id, report in export.reports.items() %}
+    <article class="card">
+      <h3>{{ report.title }}</h3>
+      <p>after={{ report.result_summary.total_findings_after_filter }} · fail={{ report.result_summary.fail }} · high={{ report.result_summary.high }}</p>
+      <div class="actions">
+        <a class="button primary" href="/reports/{{ run_id }}/exports/{{ export.id }}/{{ report_id }}/html">HTML</a>
+        {% if report.files and report.files.pdf %}
+        <a class="button" href="/reports/{{ run_id }}/exports/{{ export.id }}/{{ report_id }}/pdf">PDF</a>
+        {% endif %}
+      </div>
+    </article>
+    {% endfor %}
+  </div>
+</section>
+{% endif %}
+{% if export.pdf_errors %}
+<section class="panel">
+  <h2>PDF</h2>
+  <p class="empty">PDF не был создан, доступны HTML и JSON. Причина: {{ "; ".join(export.pdf_errors) }}</p>
+</section>
+{% endif %}
 {% endblock %}

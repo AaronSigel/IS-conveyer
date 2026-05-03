@@ -17,41 +17,19 @@
 <section class="panel">
   <h2>Фильтры и экспорт</h2>
   <form id="filter-form" method="post" action="/reports/{{ metadata.id }}/exports" class="filter-grid">
-    <label>Название экспорта<input name="title" value="Filtered report"></label>
-    <label>Preset
+    <input type="hidden" name="report_mode" value="split">
+    <label>Название экспорта<input name="title" value="Vulnerability reports"></label>
+    <label>Категория
       <select name="preset">
-        <option value="">Custom</option>
         {% for key, preset in presets.items() %}
         <option value="{{ key }}">{{ preset[0] }}</option>
         {% endfor %}
       </select>
     </label>
-    <label>Status<input name="status" placeholder="fail, pass"></label>
-    <label>Host<input name="host" placeholder="target1,target2"></label>
-    <label>Source<input name="source" placeholder="sca"></label>
-    <label>Category<input name="category"></label>
-    <label>Rule ID<input name="rule_id"></label>
-    <label>CVE<input name="cve"></label>
-    <label>Package<input name="package"></label>
-    <label>Title contains<input name="title_contains"></label>
-    <label>Severity
-      <select name="severity">
-        <option value="">Любая</option><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option><option value="critical">Critical</option>
-      </select>
-    </label>
-    <label>Severity mode
-      <select name="severity_mode"><option value="eq">Только выбранная</option><option value="gte">Не ниже выбранной</option></select>
-    </label>
-    <label>CVSS op
-      <select name="cvss_op"><option value="">Не фильтровать</option><option value="gte">&gt;=</option><option value="lte">&lt;=</option><option value="between">between</option></select>
-    </label>
-    <label>CVSS value<input name="cvss_value" type="number" min="0" max="10" step="0.1" placeholder="5.0"></label>
-    <label>CVSS min<input name="cvss_min" type="number" min="0" max="10" step="0.1"></label>
-    <label>CVSS max<input name="cvss_max" type="number" min="0" max="10" step="0.1"></label>
-    <label class="check"><input type="checkbox" name="include_missing_cvss" checked> включать findings без CVSS</label>
+    <p class="empty">Экспорт создаст два отчёта на каждый хост: configuration checks и package vulnerabilities.</p>
     <div class="form-actions">
       <button class="button" type="button" id="preview-btn">Preview</button>
-      <button class="button primary" type="submit">Создать экспорт</button>
+      <button class="button primary" type="submit">Создать отчёты по хостам</button>
     </div>
   </form>
   <pre id="preview" class="preview">Preview summary: total={{ preview_summary.total }}, fail={{ preview_summary.fail }}, high={{ preview_summary.high }}, critical={{ preview_summary.critical }}</pre>
@@ -62,7 +40,7 @@
   {% for export in exports %}
     <article class="card">
       <h3>{{ export.title }}</h3>
-      <p>{{ export.created_at }} · after={{ export.result_summary.total_findings_after_filter }}</p>
+      <p>{{ export.created_at }} · {{ export.mode|default("combined") }} · after={{ export.result_summary.total_findings_after_filter }}</p>
       <a href="/reports/{{ metadata.id }}/exports/{{ export.id }}">открыть</a>
     </article>
   {% else %}
