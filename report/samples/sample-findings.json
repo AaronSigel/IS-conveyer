@@ -9,7 +9,7 @@
     "status": "fail",
     "evidence": [
       "Command: modprobe -n -v cramfs",
-      "Compliance: cis: 1.1.1.1",
+      "Compliance: iso_27001-2013: 1.1.6,1.2.1,2.2.2,2.2.5",
       "Rules: c:modprobe -n -v cramfs -> r:^install /bin/false"
     ],
     "remediation": "Edit or create a file in `/etc/modprobe.d/` ending in `.conf` and add `install cramfs /bin/false`.",
@@ -30,7 +30,7 @@
         "c:modprobe -n -v cramfs -> r:^install /bin/false"
       ],
       "compliance": [
-        "cis: 1.1.1.1"
+        "iso_27001-2013: 1.1.6,1.2.1,2.2.2,2.2.5"
       ],
       "condition": "any"
     }

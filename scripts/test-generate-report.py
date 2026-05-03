@@ -87,12 +87,15 @@ def main():
         assert_passport_format(full_report, 4)
         assert "| Критерии опасности уязвимости | 9.3" in full_report
         assert "| Степень опасности уязвимости | critical |" in full_report
-        assert "| Наименование уязвимости | 1.1.1.1 Ensure cramfs kernel module is not available" in full_report
-        assert "| Идентификатор уязвимости | ISCV-2026-0001 |" in full_report
-        assert "Target: modprobe -n -v cramfs" in full_report
-        assert "Checks:<br>c:modprobe -n -v cramfs -> r:^install /bin/false" in full_report
-        assert "Wazuh Result: failed" in full_report
-        assert "Compliance:<br>cis: 1.1.1.1" in full_report
+        assert "| ID | 35500 |" in full_report
+        assert "| Title | 1.1.1.1 Ensure cramfs kernel module is not available (Automated) |" in full_report
+        assert "| Target | modprobe -n -v cramfs |" in full_report
+        assert "| Result | failed |" in full_report
+        assert "| Rationale | Disabling uncommon filesystems reduces the kernel attack surface. |" in full_report
+        assert "| Remediation | Edit or create a file in `/etc/modprobe.d/` ending in `.conf` and add `install cramfs /bin/false`. |" in full_report
+        assert "| Description | The cramfs filesystem type is not commonly used and should be disabled. |" in full_report
+        assert "| Checks | c:modprobe -n -v cramfs -> r:^install /bin/false |" in full_report
+        assert "| iso_27001-2013 | 1.1.6,1.2.1,2.2.2,2.2.5 |" in full_report
 
         high_report = run_report(tmpdir / "high.md", "--severity", "high")
         assert "Ensure cramfs kernel module is not available" in high_report
@@ -120,10 +123,11 @@ def main():
         assert "Применённые фильтры: статус = fail." in html_report
         assert "{'status': {'op': 'in'" not in html_report
         assert "<th>Элемент описания уязвимости</th><th>Описание уязвимости</th>" in html_report
-        assert "<td>Способ (правило) обнаружения уязвимости</td><td>Wazuh SCA policy cis_ubuntu24-04" in html_report
-        assert "Target: modprobe -n -v cramfs" in html_report
-        assert "Checks:\nc:modprobe -n -v cramfs -&gt; r:^install /bin/false" in html_report
-        assert "Wazuh Result: failed" in html_report
+        assert "<td>ID</td><td>35500</td>" in html_report
+        assert "<td>Target</td><td>modprobe -n -v cramfs</td>" in html_report
+        assert "<td>Result</td><td>failed</td>" in html_report
+        assert "<td>Checks</td><td>c:modprobe -n -v cramfs -&gt; r:^install /bin/false</td>" in html_report
+        assert "<td>iso_27001-2013</td><td>1.1.6,1.2.1,2.2.2,2.2.5</td>" in html_report
 
     print("generate-report smoke tests passed")
 

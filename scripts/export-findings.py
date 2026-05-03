@@ -277,6 +277,9 @@ def compliance_values(compliance):
     values = []
     for item in compliance or []:
         if isinstance(item, dict):
+            if "key" in item and "value" in item:
+                values.append(f"{item['key']}: {item['value']}")
+                continue
             for key, value in item.items():
                 if isinstance(value, list):
                     rendered = ", ".join(str(part) for part in value)

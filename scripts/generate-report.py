@@ -507,12 +507,41 @@ def references_text(references):
     return "\n".join(str(item) for item in references if item not in (None, "")) or NO_DATA
 
 
+def compliance_passport_rows(compliance_text):
+    rows = []
+    if not compliance_text or compliance_text == NO_DATA:
+        return rows
+    for item in str(compliance_text).splitlines():
+        if ":" in item:
+            key, value = item.split(":", 1)
+            rows.append({"label": key.strip(), "value": value.strip() or NO_DATA})
+        elif item.strip():
+            rows.append({"label": "Compliance", "value": item.strip()})
+    return rows
+
+
+def wazuh_sca_passport_rows(passport):
+    rows = [
+        {"label": "ID", "value": passport["wazuh_id"]},
+        {"label": "Title", "value": passport["wazuh_title"]},
+        {"label": "Target", "value": passport["wazuh_target"]},
+        {"label": "Result", "value": passport["wazuh_result"]},
+        {"label": "Rationale", "value": passport["wazuh_rationale"]},
+        {"label": "Remediation", "value": passport["wazuh_remediation"]},
+        {"label": "Description", "value": passport["wazuh_description"]},
+        {"label": "Checks", "value": passport["wazuh_checks"]},
+        {"label": "Condition", "value": passport["wazuh_condition"]},
+    ]
+    rows.extend(compliance_passport_rows(passport["wazuh_compliance"]))
+    return rows
+
+
 def passport_rows(passport):
+    if passport.get("show_wazuh_sca"):
+        return wazuh_sca_passport_rows(passport)
+
     discovery_parts = [
         passport["detection_method"],
-        f"Target: {passport['wazuh_target']}" if passport.get("show_wazuh_sca") else None,
-        f"Checks:\n{passport['wazuh_checks']}" if passport.get("show_wazuh_sca") else None,
-        f"Condition: {passport['wazuh_condition']}" if passport.get("show_wazuh_sca") else None,
     ]
     discovery = "\n".join(str(item) for item in discovery_parts if item and item != NO_DATA)
 
@@ -522,13 +551,6 @@ def passport_rows(passport):
         f"Источник: {passport['source_ru']}",
         f"Категория: {passport['category_ru']}",
     ]
-    if passport.get("show_wazuh_sca"):
-        other_info_parts.extend(
-            [
-                f"Wazuh Result: {passport['wazuh_result']}",
-                f"Compliance:\n{passport['wazuh_compliance']}",
-            ]
-        )
     if passport.get("references"):
         other_info_parts.append(f"Ссылки:\n{references_text(passport['references'])}")
 
@@ -654,7 +676,6 @@ def build_passport(finding, index, profile_index, metadata, report_datetime):
         "wazuh_remediation": first_value(wazuh_sca.get("remediation"), finding.get("remediation"), default=NO_DATA),
         "wazuh_checks": multiline_text(wazuh_sca.get("checks")),
         "wazuh_compliance": multiline_text(wazuh_sca.get("compliance")),
-        "wazuh_condition": first_value(wazuh_sca.get("condition"), default=NO_DATA),
         # Backward-compatible names used by older schema/templates.
         "title": first_value(finding.get("title"), profile_rule.get("title")),
         "external_ids_text": external_ids_text(finding, passport_meta),

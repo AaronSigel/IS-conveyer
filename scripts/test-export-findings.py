@@ -120,3 +120,31 @@ def test_cis_sca_findings_do_not_require_custom_profile_mapping():
     assert finding["wazuh_sca"]["checks"] == ["c:modprobe -n -v cramfs -> r:^install /bin/false"]
     assert finding["wazuh_sca"]["compliance"] == ["cis: 1.1.1.1"]
     assert finding["wazuh_sca"]["condition"] == "any"
+
+
+def test_sca_compliance_key_value_objects_become_single_pairs():
+    export_findings = load_export_findings()
+    findings = export_findings.normalize_sca_findings(
+        "target1",
+        [
+            {
+                "id": 35500,
+                "title": "Ensure cramfs filesystems is disabled.",
+                "description": "Disable cramfs.",
+                "rationale": "Uncommon filesystems should be disabled.",
+                "remediation": "Disable cramfs.",
+                "result": "passed",
+                "command": "modprobe -n -v cramfs",
+                "compliance": [
+                    {
+                        "key": "iso_27001-2013",
+                        "value": "1.1.6,1.2.1,2.2.2,2.2.5",
+                    }
+                ],
+            }
+        ],
+    )
+
+    finding = findings[0]
+    assert finding["wazuh_sca"]["compliance"] == ["iso_27001-2013: 1.1.6,1.2.1,2.2.2,2.2.5"]
+    assert finding["evidence"][-1] == "Compliance: iso_27001-2013: 1.1.6,1.2.1,2.2.2,2.2.5"
