@@ -19,13 +19,74 @@ def _templates() -> dict[str, Any]:
     return yaml.safe_load(DEFAULT_TEMPLATES.read_text(encoding="utf-8")) or {}
 
 
+def _finding_text(finding: dict[str, Any]) -> str:
+    parts = [
+        finding.get("title", ""),
+        finding.get("subsystem", ""),
+        finding.get("check", {}).get("command", ""),
+        finding.get("check", {}).get("expected", ""),
+        finding.get("description", ""),
+        finding.get("impact", ""),
+        finding.get("remediation", {}).get("summary", ""),
+    ]
+    evidence = finding.get("evidence")
+    if isinstance(evidence, list):
+        parts.extend(str(item) for item in evidence)
+    return " ".join(str(part or "") for part in parts).lower()
+
+
+def _package_family(package_name: str) -> str:
+    name = package_name.lower()
+    if name in {"openssl", "libssl3", "libssl-dev", "libcrypto3"} or name.startswith("libssl"):
+        return "openssl"
+    if name.startswith("linux-image") or name.startswith("linux-modules") or name.startswith("linux-headers") or name in {"linux-generic", "linux-base"}:
+        return "ubuntu-kernel"
+    return name or "packages"
+
+
+def _config_action_key(finding: dict[str, Any]) -> str:
+    text = _finding_text(finding)
+    title = str(finding.get("title") or "").lower()
+    subsystem = str(finding.get("subsystem") or "other")
+
+    if "aide" in text:
+        return "aide"
+    if "core dump" in text or "coredump" in text or "systemd-coredump" in text:
+        return "core_dumps"
+    if "sshd" in text or "ssh " in text or " ssh" in text:
+        return "ssh"
+    if "pam" in text or "faillock" in text or "pwquality" in text or "password" in text:
+        return "pam"
+    if "audit" in text or "auditd" in text or "augenrules" in text or "auditctl" in text:
+        if "50-scope.rules" in text or "scope" in title:
+            return "audit_50_scope"
+        if "50-user_emulation.rules" in text or "user emulation" in title:
+            return "audit_50_user_emulation"
+        if "50-identity.rules" in text or "identity" in title:
+            return "audit_50_identity"
+        if "99-finalize.rules" in text or "immutable" in text or "finalize" in title:
+            return "audit_99_finalize"
+        return "auditd"
+    if "/tmp" in text or "/dev/shm" in text:
+        return "tmp_mount_options"
+    if "/var/log/audit" in text or "/var/log" in text or "/var/tmp" in text or re.search(r"\b/var\b", text):
+        return "system_partitions"
+    if subsystem == "filesystem" and any(option in text for option in ("nodev", "nosuid", "noexec", "partition", "mount")):
+        return "filesystem_mount_options"
+    if subsystem == "kernel":
+        return f"kernel_module:{_extract_module(finding)}"
+    if subsystem == "logging":
+        return "logging"
+    return f"{subsystem}:{finding.get('requirement', {}).get('id') or finding.get('title')}"
+
+
 def remediation_key(finding: dict[str, Any]) -> tuple[Any, ...]:
     if finding.get("type") == "software_vulnerability":
         package = finding.get("package", {})
-        return ("package_update", package.get("name"), package.get("fixed_condition"))
+        package_name = str(package.get("name") or "")
+        return ("package_update", _package_family(package_name), package.get("fixed_condition"))
     if finding.get("type") == "configuration_noncompliance":
-        requirement = finding.get("requirement", {})
-        return ("config_change", finding.get("subsystem", "other"), requirement.get("id"))
+        return ("config_change", _config_action_key(finding))
     return ("manual_review", finding.get("type", "unknown"))
 
 
@@ -43,6 +104,9 @@ def _extract_module(finding: dict[str, Any]) -> str:
 
 def _verification_for_config(finding: dict[str, Any]) -> list[str]:
     templates = _templates()
+    action_key = _config_action_key(finding)
+    if action_key in templates:
+        return templates.get(action_key, {}).get("verification", [])
     subsystem = finding.get("subsystem")
     if subsystem == "filesystem":
         return [item.format(mountpoint=_extract_mountpoint(finding)) for item in templates.get("mount_options", {}).get("verification", [])]
@@ -54,6 +118,40 @@ def _verification_for_config(finding: dict[str, Any]) -> list[str]:
         return [item.format(module=_extract_module(finding)) for item in templates.get("kernel", {}).get("verification", [])]
     command = finding.get("check", {}).get("command")
     return [command] if command and command != "not provided" else ["repeat Wazuh SCA scan"]
+
+
+def _commands_for_config(finding: dict[str, Any]) -> list[str]:
+    template = _templates().get(_config_action_key(finding), {})
+    return template.get("commands", []) or finding.get("remediation", {}).get("commands", [])
+
+
+def _rollback_for_config(finding: dict[str, Any]) -> str:
+    template = _templates().get(_config_action_key(finding), {})
+    return template.get("rollback") or "Restore previous configuration file or system snapshot if change causes regression"
+
+
+def _config_title_summary(action_key: str, findings: list[dict[str, Any]]) -> tuple[str, str]:
+    template = _templates().get(action_key, {})
+    if template.get("title") or template.get("summary"):
+        return template.get("title") or findings[0].get("title"), template.get("summary") or findings[0].get("remediation", {}).get("summary", "")
+    titles = {
+        "aide": "Configure AIDE integrity monitoring",
+        "core_dumps": "Disable and harden core dump handling",
+        "ssh": "Harden sshd_config",
+        "pam": "Configure PAM password and lockout policy",
+        "auditd": "Configure auditd and audit rules",
+        "audit_50_scope": "Configure audit scope rules",
+        "audit_50_user_emulation": "Configure audit user emulation rules",
+        "audit_50_identity": "Configure audit identity rules",
+        "audit_99_finalize": "Finalize audit rules",
+        "tmp_mount_options": "Harden temporary filesystems",
+        "system_partitions": "Separate and harden system log/data partitions",
+        "filesystem_mount_options": "Harden filesystem mount options",
+        "logging": "Configure system logging",
+    }
+    title = titles.get(action_key, findings[0].get("title") or "Apply configuration change")
+    summary = f"Apply {len(findings)} related configuration checks as one operational change"
+    return title, summary
 
 
 def _package_commands(findings: list[dict[str, Any]]) -> tuple[list[str], list[str], str]:
@@ -85,12 +183,11 @@ def build_remediation_groups(findings: list[dict[str, Any]]) -> list[dict[str, A
             group_id = stable_id("REM-PKG", package_name, key[2])
         elif action_type == "config_change":
             sample = items[0]
-            title = sample.get("title") or f"Fix {key[1]} configuration"
-            summary = sample.get("remediation", {}).get("summary", "Apply required configuration change")
-            commands = sample.get("remediation", {}).get("commands", [])
+            title, summary = _config_title_summary(str(key[1]), items)
+            commands = _commands_for_config(sample)
             verification = _verification_for_config(sample)
-            rollback = "Restore previous configuration file or system snapshot if change causes regression"
-            group_id = stable_id("REM-CFG", key[1], key[2])
+            rollback = _rollback_for_config(sample)
+            group_id = stable_id("REM-CFG", key[1])
         else:
             title = "Manual review"
             summary = "Review findings manually"

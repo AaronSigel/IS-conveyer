@@ -252,7 +252,7 @@ def parse_hosts(raw_hosts):
 def build_inventory_lookup(client, targets):
     response = client.get(
         "/agents",
-        params={"select": "id,name,status,ip,lastKeepAlive", "limit": 100},
+        params={"select": "id,name,status,ip,lastKeepAlive,version", "limit": 100},
     )
     items = response.get("data", {}).get("affected_items", [])
     return {item["name"]: item for item in items if item.get("name") in targets}, response
@@ -307,7 +307,25 @@ def sca_rule_id(check_id):
     return f"{SCA_POLICY_ID}:{check_id}" if check_id is not None else SCA_POLICY_ID
 
 
-def normalize_sca_findings(host, sca_checks, sca_rules=None):
+def first_syscollector_os(os_items):
+    if not os_items:
+        return {}
+    item = os_items[0]
+    return item if isinstance(item, dict) else {}
+
+
+def syscollector_os_full(host_os):
+    full = host_os.get("full")
+    if full:
+        return full
+    name = host_os.get("os_name") or host_os.get("name")
+    version = host_os.get("os_version") or host_os.get("version")
+    return " ".join(str(part) for part in (name, version) if part) or None
+
+
+def normalize_sca_findings(host, sca_checks, sca_rules=None, agent=None, host_os=None):
+    agent = agent or {}
+    host_os = host_os or {}
     findings = []
     for item in sca_checks:
         status = normalize_sca_result(item.get("result"))
@@ -342,6 +360,18 @@ def normalize_sca_findings(host, sca_checks, sca_rules=None):
                 "impact": item.get("rationale"),
                 "detection_method": f"Wazuh SCA policy {SCA_POLICY_ID}",
                 "sca_check_id": check_id,
+                "agent": {
+                    "id": agent.get("id"),
+                    "name": agent.get("name") or host,
+                    "version": agent.get("version"),
+                },
+                "host_os": {
+                    "full": syscollector_os_full(host_os),
+                    "name": host_os.get("os_name") or host_os.get("name"),
+                    "version": host_os.get("os_version") or host_os.get("version"),
+                    "kernel": host_os.get("os_kernel") or host_os.get("kernel"),
+                    "platform": host_os.get("os_platform") or host_os.get("platform"),
+                },
                 "wazuh_sca": {
                     "id": check_id,
                     "title": item.get("title"),
@@ -651,12 +681,13 @@ def main():
             continue
         agent_id = agent["id"]
 
-        sca_checks, sca_response = fetch_sca_checks(client, agent_id)
-        raw_api["sca"][host] = sca_response
-        findings.extend(normalize_sca_findings(host, sca_checks, sca_rules))
-
         os_items, os_response = fetch_syscollector_os(client, agent_id)
         raw_api["syscollector_os"][host] = os_response
+        host_os = first_syscollector_os(os_items)
+
+        sca_checks, sca_response = fetch_sca_checks(client, agent_id)
+        raw_api["sca"][host] = sca_response
+        findings.extend(normalize_sca_findings(host, sca_checks, sca_rules, agent=agent, host_os=host_os))
 
         raw_api["syscollector_packages"][host] = {}
         for package_name in DENYLIST_PACKAGES:

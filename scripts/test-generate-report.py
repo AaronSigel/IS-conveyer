@@ -213,6 +213,9 @@ def main():
         assert normalized["remediation_plan"]
         assert "План устранения" in technical_html
         assert "Verification checklist" in technical_html
+        assert "Full normalized JSON" not in technical_html
+        assert "Appendix A. Raw Wazuh fields" not in technical_html
+        assert "{{ report|json }}" not in technical_html
         main_before_appendix = technical_html.split("Appendix A. Raw Wazuh fields", 1)[0]
         assert "_index" not in main_before_appendix
         assert "package.size" not in main_before_appendix

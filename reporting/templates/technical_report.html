@@ -2,168 +2,236 @@
 <html lang="ru">
 <head>
   <meta charset="utf-8">
-  <title>Технический отчёт {{ report.report_id }}</title>
+  <title>Technical report {{ report.report_id }}</title>
   <style>{% include "technical_report.css" %}</style>
 </head>
 <body>
 <main>
-  <h1>Технический отчёт по результатам проверки Wazuh</h1>
-  <p class="muted">{{ report.report_id }} · {{ report.generated_at }}</p>
+  <header class="report-header">
+    <p class="eyebrow">Wazuh security assessment</p>
+    <h1>Technical report</h1>
+    <p class="muted">{{ report.report_id }} · {{ report.generated_at }}</p>
+  </header>
 
-  <h2>1. Сводка запуска</h2>
-  <table>
-    <tbody>
-      <tr><th>Run ID</th><td>{{ report.run.run_id }}</td></tr>
-      <tr><th>Статус</th><td>{{ report.run.status }}</td></tr>
-      <tr><th>Профиль</th><td>{{ report.run.profile }}</td></tr>
-      <tr><th>Начало</th><td>{{ report.run.started_at }}</td></tr>
-      <tr><th>Завершение</th><td>{{ report.run.finished_at }}</td></tr>
-    </tbody>
-  </table>
-
-  <h2>2. Инвентаризация активов</h2>
-  <table>
-    <thead>
-      <tr><th>agent.id</th><th>agent.name</th><th>host.os.full</th><th>host.os.version</th><th>host.os.kernel</th><th>agent.version</th><th>total</th><th>software</th><th>configuration</th><th>max severity</th></tr>
-    </thead>
-    <tbody>
-      {% for asset in report.scope.assets %}
-      <tr>
-        <td>{{ asset["agent.id"] }}</td><td>{{ asset["agent.name"] }}</td><td>{{ asset["host.os.full"] }}</td><td>{{ asset["host.os.version"] }}</td><td>{{ asset["host.os.kernel"] }}</td><td>{{ asset["agent.version"] }}</td>
-        <td>{{ asset.findings_total }}</td><td>{{ asset.software_vulnerabilities }}</td><td>{{ asset.configuration_noncompliance }}</td><td>{{ asset.max_severity }}</td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-
-  <h2>3. Источники данных и фильтры</h2>
-  <p>Данные получены из Wazuh SCA, Wazuh syscollector и Wazuh Vulnerability Detector. Фильтры применяются к сохранённому unified-findings.json до построения нормализованной модели.</p>
-
-  <h2>4. Агрегированная техническая сводка</h2>
-  <section class="metrics">
-    <div class="metric"><b>Raw findings</b>{{ report.summary.raw_findings }}</div>
-    <div class="metric"><b>Filtered findings</b>{{ report.summary.filtered_findings }}</div>
-    <div class="metric"><b>Unique findings</b>{{ report.summary.unique_findings }}</div>
-    <div class="metric"><b>Remediation groups</b>{{ report.summary.remediation_groups }}</div>
+  <section>
+    <h2>1. Run summary</h2>
+    <table class="kv-table">
+      <tbody>
+        <tr><th>Run ID</th><td>{{ report.run.run_id }}</td></tr>
+        <tr><th>Status</th><td>{{ report.run.status }}</td></tr>
+        <tr><th>Profile</th><td>{{ report.run.profile }}</td></tr>
+        <tr><th>Started</th><td>{{ report.run.started_at }}</td></tr>
+        <tr><th>Finished</th><td>{{ report.run.finished_at }}</td></tr>
+      </tbody>
+    </table>
   </section>
-  <table>
-    <thead><tr><th>Разрез</th><th>Значения</th></tr></thead>
-    <tbody>
-      <tr><td>Severity</td><td>{{ report.summary.by_severity }}</td></tr>
-      <tr><td>Assets</td><td>{{ report.summary.by_asset }}</td></tr>
-      <tr><td>Type</td><td>{{ report.summary.by_type }}</td></tr>
-      <tr><td>Subsystem</td><td>{{ report.summary.by_subsystem }}</td></tr>
-    </tbody>
-  </table>
 
-  <h2>5. План устранения</h2>
-  <table>
-    <thead><tr><th>Priority</th><th>Group</th><th>Severity</th><th>Assets</th><th>Findings</th><th>Summary</th><th>Commands</th><th>Verification</th></tr></thead>
-    <tbody>
-      {% for group in report.remediation_plan %}
-      <tr>
-        <td>{{ group.priority }}</td><td>{{ group.title }}</td><td>{{ group.severity_max }}</td><td>{{ ", ".join(group.affected_assets) }}</td><td>{{ group.affected_findings|length }}</td><td>{{ group.summary }}</td>
-        <td>{% for command in group.commands %}<code>{{ command }}</code><br>{% endfor %}</td>
-        <td>{% for command in group.verification %}<code>{{ command }}</code><br>{% endfor %}</td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-
-  <h2>6. Группы пакетных уязвимостей</h2>
-  {% for group in report.remediation_groups if group.action_type == "package_update" %}
-  <article class="card">
-    <h3>{{ group.title }}</h3>
-    <p><b>{{ group.priority }}</b> · {{ group.severity_max }} · {{ ", ".join(group.affected_assets) }}</p>
-    <p>{{ group.summary }}</p>
-  </article>
-  {% else %}
-  <p>Пакетные remediation-группы отсутствуют.</p>
-  {% endfor %}
-
-  <h2>7. Группы конфигурационных несоответствий</h2>
-  {% for group in report.remediation_groups if group.action_type == "config_change" %}
-  <article class="card">
-    <h3>{{ group.title }}</h3>
-    <p><b>{{ group.priority }}</b> · {{ group.severity_max }} · {{ ", ".join(group.affected_assets) }}</p>
-    <p>{{ group.summary }}</p>
-  </article>
-  {% else %}
-  <p>Конфигурационные remediation-группы отсутствуют.</p>
-  {% endfor %}
-
-  <h2>8. Verification checklist</h2>
-  <table>
-    <thead><tr><th>Group</th><th>Commands</th></tr></thead>
-    <tbody>
-      {% for group in report.remediation_plan %}
-      <tr><td>{{ group.title }}</td><td>{% for command in group.verification %}<code>{{ command }}</code><br>{% endfor %}</td></tr>
-      {% endfor %}
-    </tbody>
-  </table>
-
-  <h2>9. Исключения / Under evaluation / кандидаты false positive</h2>
-  {% for finding in report.under_evaluation %}
-  <article class="card">
-    <h3>{{ finding.finding_uid }} · {{ finding.title }}</h3>
-    <p>{{ ", ".join(finding.affected_assets) }} · {{ finding.severity.level }}</p>
-  </article>
-  {% else %}
-  <p>Записи без оценки или под ручной проверкой отсутствуют.</p>
-  {% endfor %}
-
-  <h2>10. Детальные карточки findings</h2>
-  {% for finding in report.findings %}
-  <article class="card">
-    <h3>{{ finding.finding_uid }} · {{ finding.title }}</h3>
-    {% if finding.type == "software_vulnerability" %}
-    <table>
+  <section>
+    <h2>2. Asset inventory</h2>
+    <table class="asset-table">
+      <thead>
+        <tr>
+          <th>Agent</th>
+          <th>OS</th>
+          <th>Kernel</th>
+          <th>Wazuh</th>
+          <th>Total</th>
+          <th>Software</th>
+          <th>Config</th>
+          <th>Max severity</th>
+        </tr>
+      </thead>
       <tbody>
-        <tr><th>Finding ID</th><td>{{ finding.finding_uid }}</td></tr>
-        <tr><th>CVE</th><td>{{ finding.cve }}</td></tr>
-        <tr><th>Package</th><td>{{ finding.package.name }}</td></tr>
-        <tr><th>Installed versions by asset</th><td>{{ finding.package.installed_versions }}</td></tr>
-        <tr><th>Fixed condition</th><td>{{ finding.package.fixed_condition }}</td></tr>
-        <tr><th>Severity / CVSS</th><td>{{ finding.severity.level }} / {{ finding.severity.score }}</td></tr>
-        <tr><th>Affected assets</th><td>{{ ", ".join(finding.affected_assets) }}</td></tr>
-        <tr><th>Detection source</th><td>{{ finding.detection.source }} · {{ finding.detection.scanner }}</td></tr>
-        <tr><th>Evidence</th><td>{{ finding.evidence }}</td></tr>
-        <tr><th>Remediation</th><td>{{ finding.remediation.summary }}</td></tr>
-        <tr><th>Verification</th><td>{{ finding.remediation.verification }}</td></tr>
-        <tr><th>References</th><td>{{ finding.references }}</td></tr>
+        {% for asset in report.scope.assets %}
+        <tr>
+          <td><b>{{ asset["agent.name"] }}</b><br><span class="muted">{{ asset["agent.id"] }}</span></td>
+          <td>{{ asset["host.os.full"] }}<br><span class="muted">{{ asset["host.os.version"] }}</span></td>
+          <td>{{ asset["host.os.kernel"] }}</td>
+          <td>{{ asset["agent.version"] }}</td>
+          <td>{{ asset.findings_total }}</td>
+          <td>{{ asset.software_vulnerabilities }}</td>
+          <td>{{ asset.configuration_noncompliance }}</td>
+          <td><span class="badge severity-{{ asset.max_severity }}">{{ asset.max_severity }}</span></td>
+        </tr>
+        {% else %}
+        <tr><td colspan="8">No assets found in normalized findings.</td></tr>
+        {% endfor %}
       </tbody>
     </table>
+  </section>
+
+  <section>
+    <h2>3. Risk and findings summary</h2>
+    <div class="metrics">
+      <div class="metric"><span>Raw findings</span><b>{{ report.summary.raw_findings }}</b></div>
+      <div class="metric"><span>Filtered findings</span><b>{{ report.summary.filtered_findings }}</b></div>
+      <div class="metric"><span>Unique findings</span><b>{{ report.summary.unique_findings }}</b></div>
+      <div class="metric"><span>Remediation groups</span><b>{{ report.summary.remediation_groups }}</b></div>
+    </div>
+    <div class="summary-grid">
+      <table>
+        <thead><tr><th>Severity</th><th>Count</th></tr></thead>
+        <tbody>
+          {% for severity, count in report.summary.by_severity.items() %}
+          <tr><td>{{ severity }}</td><td>{{ count }}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      <table>
+        <thead><tr><th>Type</th><th>Count</th></tr></thead>
+        <tbody>
+          {% for type, count in report.summary.by_type.items() %}
+          <tr><td>{{ type }}</td><td>{{ count }}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      <table>
+        <thead><tr><th>Subsystem</th><th>Count</th></tr></thead>
+        <tbody>
+          {% for subsystem, count in report.summary.by_subsystem.items() %}
+          <tr><td>{{ subsystem }}</td><td>{{ count }}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2>4. План устранения / Top remediation actions</h2>
+    <table class="plan-table">
+      <thead>
+        <tr>
+          <th>Priority</th>
+          <th>Group</th>
+          <th>Severity</th>
+          <th>Assets</th>
+          <th>Findings</th>
+          <th>Summary</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for group in report.remediation_plan %}
+        <tr>
+          <td>{{ group.priority }}</td>
+          <td>{{ group.title }}</td>
+          <td><span class="badge severity-{{ group.severity_max }}">{{ group.severity_max }}</span></td>
+          <td>{{ ", ".join(group.affected_assets) }}</td>
+          <td>{{ group.affected_findings|length }}</td>
+          <td>{{ group.summary }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="6">No remediation actions for the selected findings.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>5. Configuration remediation groups</h2>
+    {% for group in report.remediation_groups if group.action_type == "config_change" %}
+    <article class="card">
+      <h3>{{ group.title }}</h3>
+      <p class="meta">{{ group.priority }} · {{ group.severity_max }} · {{ ", ".join(group.affected_assets) }} · {{ group.affected_findings|length }} findings</p>
+      <p>{{ group.summary }}</p>
+      {% if group.commands %}
+      <h4>Commands</h4>
+      <ul class="code-list">{% for command in group.commands %}<li><code>{{ command }}</code></li>{% endfor %}</ul>
+      {% endif %}
+      <h4>Verification</h4>
+      <ul class="code-list">{% for command in group.verification %}<li><code>{{ command }}</code></li>{% endfor %}</ul>
+      <p class="muted"><b>Rollback:</b> {{ group.rollback }}</p>
+    </article>
     {% else %}
-    <table>
+    <p>No configuration remediation groups.</p>
+    {% endfor %}
+  </section>
+
+  <section>
+    <h2>6. Software vulnerability groups</h2>
+    {% for group in report.remediation_groups if group.action_type == "package_update" %}
+    <article class="card">
+      <h3>{{ group.title }}</h3>
+      <p class="meta">{{ group.priority }} · {{ group.severity_max }} · {{ ", ".join(group.affected_assets) }} · {{ group.affected_findings|length }} findings</p>
+      <p>{{ group.summary }}</p>
+      <h4>Commands</h4>
+      <ul class="code-list">{% for command in group.commands %}<li><code>{{ command }}</code></li>{% endfor %}</ul>
+      <h4>Verification</h4>
+      <ul class="code-list">{% for command in group.verification %}<li><code>{{ command }}</code></li>{% endfor %}</ul>
+      <p class="muted"><b>Rollback:</b> {{ group.rollback }}</p>
+    </article>
+    {% else %}
+    <p>No software vulnerability groups.</p>
+    {% endfor %}
+  </section>
+
+  <section>
+    <h2>7. Verification checklist</h2>
+    <table class="plan-table">
+      <thead><tr><th>Priority</th><th>Group</th><th>Assets</th><th>Verification</th></tr></thead>
       <tbody>
-        <tr><th>Finding ID</th><td>{{ finding.finding_uid }}</td></tr>
-        <tr><th>Requirement ID</th><td>{{ finding.requirement.id }}</td></tr>
-        <tr><th>Requirement title</th><td>{{ finding.requirement.title }}</td></tr>
-        <tr><th>Subsystem</th><td>{{ finding.subsystem }}</td></tr>
-        <tr><th>Affected assets</th><td>{{ ", ".join(finding.affected_assets) }}</td></tr>
-        <tr><th>Check command</th><td>{{ finding.check.command }}</td></tr>
-        <tr><th>Expected state</th><td>{{ finding.check.expected }}</td></tr>
-        <tr><th>Actual result</th><td>{{ finding.check.actual }}</td></tr>
-        <tr><th>Security impact</th><td>{{ finding.impact }}</td></tr>
-        <tr><th>Remediation</th><td>{{ finding.remediation.summary }}</td></tr>
-        <tr><th>Verification</th><td>{{ finding.remediation.verification }}</td></tr>
-        <tr><th>References</th><td>{{ finding.references }}</td></tr>
+        {% for group in report.remediation_plan %}
+        <tr>
+          <td>{{ group.priority }}</td>
+          <td>{{ group.title }}</td>
+          <td>{{ ", ".join(group.affected_assets) }}</td>
+          <td>{% for command in group.verification %}<code>{{ command }}</code>{% if not loop.last %}<br>{% endif %}{% endfor %}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="4">No verification commands for the selected findings.</td></tr>
+        {% endfor %}
       </tbody>
     </table>
-    {% endif %}
-  </article>
-  {% else %}
-  <p>Основные findings отсутствуют.</p>
-  {% endfor %}
+  </section>
 
-  <h2>Appendix A. Raw Wazuh fields</h2>
-  <pre>{{ report.raw_refs|json }}</pre>
+  <section>
+    <h2>8. Exceptions and under evaluation</h2>
+    {% for finding in report.under_evaluation %}
+    <article class="card compact">
+      <h3>{{ finding.finding_uid }} · {{ finding.title }}</h3>
+      <p class="meta">{{ ", ".join(finding.affected_assets) }} · {{ finding.severity.level }}</p>
+    </article>
+    {% else %}
+    <p>No findings marked as under evaluation.</p>
+    {% endfor %}
+  </section>
 
-  <h2>Appendix B. Full normalized JSON</h2>
-  <pre>{{ report|json }}</pre>
+  <section>
+    <h2>9. Detailed finding cards</h2>
+    {% for finding in report.findings %}
+    <article class="card finding-card">
+      <h3>{{ finding.finding_uid }} · {{ finding.title }}</h3>
+      <table class="kv-table">
+        <tbody>
+          <tr><th>Type</th><td>{{ finding.type }}</td></tr>
+          <tr><th>Severity</th><td>{{ finding.severity.level }}{% if finding.severity.score is not none %} / {{ finding.severity.score }}{% endif %}</td></tr>
+          <tr><th>Affected assets</th><td>{{ ", ".join(finding.affected_assets) }}</td></tr>
+          {% if finding.type == "software_vulnerability" %}
+          <tr><th>CVE</th><td>{{ finding.cve }}</td></tr>
+          <tr><th>Package</th><td>{{ finding.package.name }}</td></tr>
+          <tr><th>Installed versions</th><td>{{ finding.package.installed_versions }}</td></tr>
+          <tr><th>Fixed condition</th><td>{{ finding.package.fixed_condition }}</td></tr>
+          {% else %}
+          <tr><th>Requirement</th><td>{{ finding.requirement.id }} · {{ finding.requirement.title }}</td></tr>
+          <tr><th>Subsystem</th><td>{{ finding.subsystem }}</td></tr>
+          <tr><th>Check command</th><td><code>{{ finding.check.command }}</code></td></tr>
+          <tr><th>Expected</th><td>{{ finding.check.expected }}</td></tr>
+          <tr><th>Actual</th><td>{{ finding.check.actual }}</td></tr>
+          {% endif %}
+          <tr><th>Impact</th><td>{{ finding.impact or finding.description }}</td></tr>
+          <tr><th>Remediation</th><td>{{ finding.remediation.summary }}</td></tr>
+          <tr><th>Evidence</th><td>{% for item in finding.evidence %}{{ item }}{% if not loop.last %}<br>{% endif %}{% endfor %}</td></tr>
+        </tbody>
+      </table>
+    </article>
+    {% else %}
+    <p>No main findings for the selected filters.</p>
+    {% endfor %}
+  </section>
 
-  <h2>Appendix C. Rule and scanner metadata</h2>
-  <p>Scanner metadata is preserved in detection fields and raw references.</p>
+  <section class="appendix-note">
+    <h2>10. Raw artifacts</h2>
+    <p>Machine-readable report data and raw Wazuh API/indexer snapshots are stored as separate artifacts next to this report. They are intentionally not embedded into the PDF body.</p>
+  </section>
 </main>
 </body>
 </html>

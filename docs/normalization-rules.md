@@ -58,14 +58,40 @@
 
 ## Дедупликация
 
-Два findings считаются дублями, если совпадают:
+Дедупликация выполняется после преобразования raw findings в нормализованную модель.
 
-- `host`
-- `source`
-- `category`
-- `rule_id`
+Для `software_vulnerability` ключ дубля:
 
-Если встречаются дубликаты с разными статусами, приоритет остаётся за `fail`.
+- `cve`
+- `package.name`
+- `package.installed_version`
+- `package.fixed_condition`
+
+Для `configuration_noncompliance` ключ дубля:
+
+- `requirement.id`
+- `check.command`
+- `check.expected`
+
+При совпадении ключа findings объединяются: `affected_assets`, `asset_details`, `raw_refs`, `evidence` и `package.installed_versions` агрегируются по активам.
+
+## Remediation grouping
+
+Remediation-группы не обязаны совпадать с ключами дедупликации.
+
+Для пакетов базовый ключ - `package.name + fixed_condition`, но связанные пакеты могут объединяться в инженерную группу. Например, `openssl`, `libssl3`, `libssl-dev` группируются как `openssl`, а kernel-пакеты - как `ubuntu-kernel`.
+
+Для конфигурации группировка выполняется по действию исправления, а не по CIS ID. Примеры групп:
+
+- `aide`
+- `core_dumps`
+- `ssh`
+- `pam`
+- `auditd` и отдельные audit rules files
+- `tmp_mount_options`
+- `system_partitions`
+
+Verification-команды берутся из `reporting/config/remediation_templates.yaml`. Если для действия нет локального шаблона, используется fallback по subsystem или исходная check-команда.
 
 ## Разделение По Типам
 
@@ -105,6 +131,8 @@
 - Wazuh SCA `id` -> `sca_check_id`;
 - `cis_ubuntu24-04:<id>` -> итоговый `rule_id`;
 - `title`, `description`, `rationale`, `remediation`, `result`, `compliance` берутся из ответа Wazuh API;
+- `agent.id`, `agent.name`, `agent.version` добавляются из `Wazuh API /agents`;
+- `host.os.full`, `host.os.version`, `host.os.kernel` добавляются из `Wazuh API /syscollector/{agent_id}/os`;
 - `category` фиксируется как `configuration`;
 - `finding_type` фиксируется как `configuration_noncompliance`;
 - при отсутствии severity exporter использует `medium`.

@@ -7,6 +7,113 @@ package_update:
     - "dpkg -l | grep -E '{package_pattern}'"
     - "repeat Wazuh vulnerability scan"
   rollback: "Use package manager history or restore from snapshot if update causes regression"
+aide:
+  title: "Configure AIDE integrity monitoring"
+  summary: "Install AIDE, initialize the database, and enable scheduled integrity checks"
+  commands:
+    - "sudo apt update"
+    - "sudo apt install aide aide-common"
+    - "sudo aideinit"
+    - "sudo systemctl enable --now dailyaidecheck.timer"
+  verification:
+    - "dpkg -s aide aide-common"
+    - "test -f /var/lib/aide/aide.db || test -f /var/lib/aide/aide.db.gz"
+    - "systemctl is-enabled dailyaidecheck.timer"
+    - "systemctl status dailyaidecheck.timer"
+  rollback: "Disable dailyaidecheck.timer and remove AIDE only after accepting the loss of file integrity monitoring"
+core_dumps:
+  title: "Disable and harden core dump handling"
+  summary: "Disable or restrict core dumps through systemd-coredump, sysctl, and limits configuration"
+  commands:
+    - "sudo systemctl daemon-reload"
+    - "sudo sysctl --system"
+  verification:
+    - "sysctl fs.suid_dumpable"
+    - "systemd-analyze cat-config systemd/coredump.conf"
+    - "grep -R \"hard core\" /etc/security/limits.conf /etc/security/limits.d || true"
+  rollback: "Restore the previous sysctl, limits, or systemd-coredump configuration"
+ssh:
+  title: "Harden sshd_config"
+  summary: "Apply SSH daemon hardening in /etc/ssh/sshd_config.d and reload sshd after syntax validation"
+  commands:
+    - "sudo sshd -t"
+    - "sudo systemctl reload ssh"
+  verification:
+    - "sshd -T"
+    - "systemctl status ssh"
+  rollback: "Remove or restore the changed sshd_config.d drop-in and reload ssh"
+pam:
+  title: "Configure PAM password and lockout policy"
+  summary: "Apply password quality, password history, and account lockout policy through PAM configuration"
+  commands:
+    - "sudo pam-auth-update --enable faillock"
+  verification:
+    - "grep -R \"pam_faillock\\|pam_pwquality\\|pam_pwhistory\" /etc/pam.d /etc/security || true"
+    - "faillock --user root || true"
+  rollback: "Restore previous PAM files from backup and test login in an active root session before closing it"
+auditd:
+  title: "Configure auditd and audit rules"
+  summary: "Install auditd, load audit rules, and verify audit subsystem status"
+  commands:
+    - "sudo apt update"
+    - "sudo apt install auditd audispd-plugins"
+    - "sudo augenrules --load"
+  verification:
+    - "auditctl -s"
+    - "augenrules --check"
+    - "systemctl status auditd"
+  rollback: "Restore previous /etc/audit rules and reload auditd"
+audit_50_scope:
+  title: "Configure audit scope rules"
+  summary: "Apply audit scope rules in /etc/audit/rules.d/50-scope.rules"
+  verification:
+    - "test -f /etc/audit/rules.d/50-scope.rules"
+    - "augenrules --check"
+    - "auditctl -l"
+  rollback: "Restore previous 50-scope.rules and reload auditd"
+audit_50_user_emulation:
+  title: "Configure audit user emulation rules"
+  summary: "Apply user emulation audit rules in /etc/audit/rules.d/50-user_emulation.rules"
+  verification:
+    - "test -f /etc/audit/rules.d/50-user_emulation.rules"
+    - "augenrules --check"
+    - "auditctl -l"
+  rollback: "Restore previous 50-user_emulation.rules and reload auditd"
+audit_50_identity:
+  title: "Configure audit identity rules"
+  summary: "Apply identity audit rules in /etc/audit/rules.d/50-identity.rules"
+  verification:
+    - "test -f /etc/audit/rules.d/50-identity.rules"
+    - "augenrules --check"
+    - "auditctl -l"
+  rollback: "Restore previous 50-identity.rules and reload auditd"
+audit_99_finalize:
+  title: "Finalize audit rules"
+  summary: "Apply immutable/final audit settings in /etc/audit/rules.d/99-finalize.rules"
+  verification:
+    - "test -f /etc/audit/rules.d/99-finalize.rules"
+    - "augenrules --check"
+    - "auditctl -s"
+  rollback: "Restore previous 99-finalize.rules and reload auditd"
+tmp_mount_options:
+  title: "Harden temporary filesystems"
+  summary: "Apply separate temporary filesystem and nodev/nosuid/noexec mount options where required"
+  verification:
+    - "findmnt -kn /tmp"
+    - "findmnt -kn /var/tmp || true"
+    - "findmnt -kn /dev/shm || true"
+    - "grep -E '[[:space:]]/(tmp|var/tmp|dev/shm)[[:space:]]' /etc/fstab"
+  rollback: "Restore previous /etc/fstab entries and remount affected filesystems"
+system_partitions:
+  title: "Separate and harden system log/data partitions"
+  summary: "Review /var, /var/log, /var/log/audit, and /var/tmp partitioning and mount options as one storage change"
+  verification:
+    - "findmnt -kn /var || true"
+    - "findmnt -kn /var/log || true"
+    - "findmnt -kn /var/log/audit || true"
+    - "findmnt -kn /var/tmp || true"
+    - "grep -E '[[:space:]]/var(/log|/log/audit|/tmp)?[[:space:]]' /etc/fstab"
+  rollback: "Restore previous /etc/fstab entries and remount affected filesystems"
 mount_options:
   verification:
     - "findmnt -kn {mountpoint}"

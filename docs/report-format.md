@@ -1,41 +1,56 @@
-# Формат Технического Отчёта
+# Формат технического отчёта
 
-Итоговый markdown-отчёт является техническим отчётом по результатам проверки защищённости хостов. Он не является академической пояснительной запиской и не содержит титульный лист, реферат, содержание, приложения, сводную таблицу findings или отдельный remediation plan.
+Главный контракт современного отчёта - `normalized_report.json`. HTML и PDF являются представлением этой нормализованной модели, а raw-данные Wazuh сохраняются рядом отдельными артефактами и не встраиваются в тело PDF.
 
-Основной результат отчёта - раздел `5 ПАСПОРТА ВЫЯВЛЕННЫХ УЯЗВИМОСТЕЙ И НЕСООТВЕТСТВИЙ`. Для каждого finding, прошедшего фильтрацию, формируется отдельный паспорт выявленной уязвимости / несоответствия.
+Legacy markdown-отчёт с паспортами сохраняется для совместимости через `scripts/generate-report.py --mode legacy`, но MVP-артефактами считаются:
 
-## Структура
+- `metadata.json`
+- `unified-findings.json`
+- `normalized_report.json`
+- `technical_report.html`
+- `technical_report.pdf`
+- `raw/wazuh-sca.json`
+- `raw/wazuh-vulnerabilities.json`
+
+## Структура `normalized_report.json`
 
 ```text
-ОТЧЁТ О РЕЗУЛЬТАТАХ ПРОВЕРКИ ЗАЩИЩЁННОСТИ ХОСТОВ
-
-0 СВЕДЕНИЯ ОБ ОТЧЁТЕ
-1 ОБЩИЕ СВЕДЕНИЯ О ПРОВЕРКЕ
-2 СВЕДЕНИЯ ОБ ОБЪЕКТЕ ПРОВЕРКИ
-3 МЕТОДИКА ПРОВЕДЕНИЯ ПРОВЕРКИ
-4 ОБОБЩЁННЫЕ РЕЗУЛЬТАТЫ ПРОВЕРКИ
-5 ПАСПОРТА ВЫЯВЛЕННЫХ УЯЗВИМОСТЕЙ И НЕСООТВЕТСТВИЙ
-6 ЗАКЛЮЧЕНИЕ
+report_id
+generated_at
+run
+scope.assets
+summary
+remediation_plan
+remediation_groups
+findings
+under_evaluation
+raw_refs
 ```
 
-Сводка в разделе 4 строится только по findings, которые прошли фильтрацию. Отдельная таблица со списком всех findings не используется.
+`findings` содержит основные активные findings после фильтрации, дедупликации и исключения `pass`/`under_evaluation`. `under_evaluation` хранится отдельно и не попадает в remediation plan. `raw_refs` нужен для трассировки, но не печатается в PDF.
 
-## Паспорт
+## Структура HTML/PDF
 
-Паспорт строится по подходу ГОСТ Р 56545-2015 и содержит:
+Технический HTML/PDF строится из `reporting/templates/technical_report.html` и содержит:
 
-- наименование уязвимости / несоответствия;
-- идентификатор паспорта `ISCV-YYYY-NNNN`;
-- внешние идентификаторы, включая Rule ID, CVE, CWE, BDU при наличии;
-- класс уязвимости;
-- тип недостатка;
-- место возникновения / проявления;
-- объект проверки;
-- способ обнаружения и источник данных;
-- уровень опасности, статус и CVSS;
-- описание, доказательство, возможные последствия и возможные меры устранения.
+1. Run summary
+2. Asset inventory
+3. Risk and findings summary
+4. План устранения / Top remediation actions
+5. Configuration remediation groups
+6. Software vulnerability groups
+7. Verification checklist
+8. Exceptions and under evaluation
+9. Detailed finding cards
+10. Raw artifacts note
 
-План устранения не выносится в отдельный раздел. Он находится внутри каждого паспорта в поле `Возможные меры по устранению уязвимости`.
+Таблица remediation plan содержит только короткие поля: priority, group, severity, assets, findings и summary. Полные commands, verification и rollback выводятся в карточках remediation-групп. Полный JSON и raw Wazuh snapshots должны скачиваться отдельными файлами, а не вставляться в PDF.
+
+## Asset inventory
+
+Инвентаризация активов строится из `asset_details` нормализованных findings. Для SCA findings exporter добавляет данные Wazuh agent и syscollector OS, чтобы поля `agent.id`, `agent.version`, `host.os.full`, `host.os.version`, `host.os.kernel` заполнялись тем же способом, что и для vulnerability findings.
+
+`unknown` допустим только если исходные Wazuh API/indexer данные действительно не содержат соответствующего поля.
 
 ## Фильтры
 
@@ -51,40 +66,8 @@
 - `--cvss-min`
 - `--cvss-max`
 
-Фильтры со списками принимают значения через запятую. Если фильтры не указаны, в отчёт включаются все findings. Если после фильтрации findings не осталось, отчёт всё равно создаётся, а раздел 5 содержит сообщение об отсутствии уязвимостей и несоответствий по заданным критериям.
+Фильтры со списками принимают значения через запятую. Если после фильтрации findings не осталось, отчёт всё равно создаётся, но remediation plan и finding cards остаются пустыми.
 
-## Примеры
+## Legacy markdown
 
-```bash
-python scripts/generate-report.py \
-  --findings artifacts/unified-findings.json \
-  --profile profiles/cis_ubuntu24-04.yml \
-  --metadata config/report-metadata.yml \
-  --output report/technical-report.md \
-  --status failed \
-  --severity high,critical
-```
-
-```bash
-python scripts/generate-report.py \
-  --findings artifacts/unified-findings.json \
-  --output report/cvss-report.md \
-  --source wazuh_vulnerability \
-  --cvss-min 5.0
-```
-
-```bash
-python scripts/generate-report.py \
-  --findings artifacts/unified-findings.json \
-  --output report/target1-report.md \
-  --host target1 \
-  --status failed
-```
-
-## Mapping Finding -> Passport
-
-Для SCA findings используется тип `configuration_noncompliance`. Способ обнаружения формируется как `Wazuh SCA check <sca_check_id>` или `Wazuh SCA policy cis_ubuntu24-04`, CVSS считается неприменимым. Для CIS checks паспорт строится из полей finding, полученных от Wazuh, и безопасных fallback-значений.
-
-Для CVE findings с `source == wazuh_vulnerability`, `source == wazuh-indexer-vulnerabilities` или `finding_type == software_vulnerability` используется класс `Уязвимость программного обеспечения`. Наименование ПО и версия берутся из `affected_component` или evidence `Package: ...`; CVE берётся из `external_ids.cve`, `finding.cve`, `rule_id` или evidence; CVSS берётся из `finding.cvss` или evidence `CVSS base: ...`.
-
-При отсутствии данных генератор использует безопасные значения `не определено`, `не применимо` и `данные отсутствуют`.
+Legacy markdown-режим формирует разделы 0-6 и паспорта findings в стиле старого технического отчёта. Он не является источником истины для MVP HTML/PDF и не должен использоваться для описания структуры `normalized_report.json`.

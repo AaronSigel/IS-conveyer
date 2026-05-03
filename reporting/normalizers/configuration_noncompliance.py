@@ -4,7 +4,7 @@ import re
 from typing import Any
 
 from reporting.aggregation.subsystem_classifier import classify_subsystem
-from reporting.common import UNKNOWN, as_text, first_value, stable_id
+from reporting.common import UNKNOWN, as_text, first_value, nested, stable_id
 
 
 def _requirement_id(raw: dict[str, Any], sca: dict[str, Any]) -> str:
@@ -32,6 +32,8 @@ def _expected_state(sca: dict[str, Any], raw: dict[str, Any]) -> str:
 def normalize_configuration_finding(raw: dict[str, Any]) -> dict[str, Any]:
     """Convert a Wazuh SCA configuration finding to a normalized finding."""
     sca = raw.get("wazuh_sca") if isinstance(raw.get("wazuh_sca"), dict) else {}
+    agent = raw.get("agent") if isinstance(raw.get("agent"), dict) else {}
+    host_os = raw.get("host_os") if isinstance(raw.get("host_os"), dict) else {}
     asset = as_text(raw.get("host"))
     requirement_id = _requirement_id(raw, sca)
     title = as_text(first_value(raw.get("title"), sca.get("title")))
@@ -85,12 +87,12 @@ def normalize_configuration_finding(raw: dict[str, Any]) -> dict[str, Any]:
         "under_evaluation": bool(raw.get("under_evaluation")),
         "asset_details": {
             asset: {
-                "agent.id": "unknown",
-                "agent.name": asset,
-                "host.os.full": as_text(raw.get("os_platform")),
-                "host.os.version": "unknown",
-                "host.os.kernel": "unknown",
-                "agent.version": "unknown",
+                "agent.id": as_text(agent.get("id")),
+                "agent.name": as_text(first_value(agent.get("name"), asset)),
+                "host.os.full": as_text(first_value(host_os.get("full"), raw.get("os_platform"), host_os.get("name"))),
+                "host.os.version": as_text(first_value(host_os.get("version"), nested(raw, "host", "os", "version"))),
+                "host.os.kernel": as_text(first_value(host_os.get("kernel"), nested(raw, "host", "os", "kernel"))),
+                "agent.version": as_text(agent.get("version")),
             }
         }
         if asset != UNKNOWN
