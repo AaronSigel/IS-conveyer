@@ -8,12 +8,14 @@ from starlette.concurrency import run_in_threadpool
 
 from web import jobs, runs
 from web.filters import PRESETS, apply_filters, filters_from_form, normalize_findings
+from web.i18n import install_jinja_filters
 from web.reports import create_export
 
 
-app = FastAPI(title="IS Conveyer Web UI")
+app = FastAPI(title="IS Conveyer")
 BASE_DIR = Path(__file__).resolve().parent
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
+install_jinja_filters(templates.env)
 app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
 
 
@@ -97,7 +99,7 @@ def report_json(run_id: str):
 def report_normalized_json(run_id: str):
     path = runs.run_dir(run_id) / "normalized_report.json"
     if not path.exists():
-        return PlainTextResponse("normalized_report.json is not available for this run", status_code=404)
+        return PlainTextResponse("normalized_report.json недоступен для этого запуска", status_code=404)
     return FileResponse(path, media_type="application/json", filename=f"{run_id}-normalized_report.json")
 
 
@@ -105,7 +107,7 @@ def report_normalized_json(run_id: str):
 def report_html(run_id: str):
     path = runs.run_dir(run_id) / "technical_report.html"
     if not path.exists():
-        return PlainTextResponse("technical_report.html is not available for this run", status_code=404)
+        return PlainTextResponse("technical_report.html недоступен для этого запуска", status_code=404)
     return FileResponse(path, media_type="text/html", filename=f"{run_id}-technical_report.html")
 
 
@@ -113,7 +115,7 @@ def report_html(run_id: str):
 def report_pdf(run_id: str):
     path = runs.run_dir(run_id) / "technical_report.pdf"
     if not path.exists():
-        return PlainTextResponse("technical_report.pdf is not available for this run. Check logs for PDF renderer availability.", status_code=404)
+        return PlainTextResponse("technical_report.pdf недоступен для этого запуска. Проверьте логи формирования PDF.", status_code=404)
     return FileResponse(path, media_type="application/pdf", filename=f"{run_id}-technical_report.pdf")
 
 
@@ -124,11 +126,11 @@ def report_raw_artifact(run_id: str, artifact: str):
         "wazuh-vulnerabilities": ("wazuh-vulnerabilities.json", "application/json"),
     }
     if artifact not in allowed:
-        return PlainTextResponse("Unknown raw artifact", status_code=404)
+        return PlainTextResponse("Неизвестный исходный артефакт", status_code=404)
     filename, media_type = allowed[artifact]
     path = runs.run_dir(run_id) / "raw" / filename
     if not path.exists():
-        return PlainTextResponse(f"{filename} is not available for this run", status_code=404)
+        return PlainTextResponse(f"{filename} недоступен для этого запуска", status_code=404)
     return FileResponse(path, media_type=media_type, filename=f"{run_id}-{filename}")
 
 
@@ -144,7 +146,7 @@ async def report_preview(run_id: str, request: Request):
 @app.post("/reports/{run_id}/exports")
 async def report_export(run_id: str, request: Request):
     form = dict(await request.form())
-    title = str(form.get("title") or "Split reports")
+    title = str(form.get("title") or "Раздельные отчёты")
     report_mode = str(form.get("report_mode") or "split")
     export = await run_in_threadpool(create_export, run_id, title, filters_from_form(form), None, report_mode)
     return RedirectResponse(f"/reports/{run_id}/exports/{export['id']}", status_code=303)
@@ -183,7 +185,7 @@ def export_report_html(run_id: str, export_id: str, report_id: str):
     report = (export.get("reports") or {}).get(report_id, {})
     filename = (report.get("files") or {}).get("html")
     if not filename:
-        return PlainTextResponse("Report HTML file not found", status_code=404)
+        return PlainTextResponse("HTML-файл отчёта не найден", status_code=404)
     path = runs.run_dir(run_id) / "exports" / export_id / filename
     return FileResponse(path, media_type="text/html", filename=f"{run_id}-{export_id}-{report_id}.html")
 
@@ -196,6 +198,6 @@ def export_report_pdf(run_id: str, export_id: str, report_id: str):
     report = (export.get("reports") or {}).get(report_id, {})
     filename = (report.get("files") or {}).get("pdf")
     if not filename:
-        return PlainTextResponse("Report PDF file not found", status_code=404)
+        return PlainTextResponse("PDF-файл отчёта не найден", status_code=404)
     path = runs.run_dir(run_id) / "exports" / export_id / filename
     return FileResponse(path, media_type="application/pdf", filename=f"{run_id}-{export_id}-{report_id}.pdf")

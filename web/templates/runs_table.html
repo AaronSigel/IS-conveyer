@@ -2,7 +2,7 @@
   <table>
     <thead>
       <tr>
-        <th>Дата</th><th>Run ID</th><th>Хосты</th><th>Статус</th><th>Total</th><th>Fail</th><th>High</th><th>Critical</th><th>Действия</th>
+        <th>Дата</th><th>ID запуска</th><th>Хосты</th><th>Статус</th><th>Всего</th><th>Ошибок</th><th>Высоких</th><th>Критических</th><th>Действия</th>
       </tr>
     </thead>
     <tbody>
@@ -11,7 +11,7 @@
         <td>{{ run.started_at or run.id }}</td>
         <td><a href="/scans/{{ run.id }}">{{ run.id }}</a></td>
         <td>{{ ", ".join(run.hosts or []) }}</td>
-        <td><span class="status {{ run.status }}">{{ run.status }}</span></td>
+        <td><span class="status {{ run.status }}">{{ run.status|ru_status }}</span></td>
         <td>{{ run.summary.total }}</td>
         <td>{{ run.summary.fail }}</td>
         <td>{{ run.summary.high }}</td>

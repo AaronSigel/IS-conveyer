@@ -6,6 +6,8 @@ from typing import Any
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
+from reporting.i18n import install_jinja_filters
+
 
 TEMPLATES_DIR = pathlib.Path(__file__).resolve().parents[1] / "templates"
 
@@ -17,6 +19,7 @@ def _json(value: Any) -> str:
 def _environment() -> Environment:
     env = Environment(loader=FileSystemLoader(TEMPLATES_DIR), autoescape=select_autoescape(["html", "xml"]))
     env.filters["json"] = _json
+    install_jinja_filters(env)
     return env
 
 

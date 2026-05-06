@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
   <meta charset="utf-8">
-  <title>Technical report {{ report.report_id }}</title>
+  <title>Технический отчёт {{ report.report_id }}</title>
   <style>{% include "technical_report.css" %}</style>
 </head>
 <body>
@@ -17,11 +17,11 @@
     <h2>1. Сведения об отчёте</h2>
     <table class="kv-table">
       <tbody>
-        <tr><th>Идентификатор run</th><td>{{ report.run.run_id }}</td></tr>
-        <tr><th>Статус</th><td>{% if report.run.status in ["succeeded", "completed", "success"] %}завершено успешно{% else %}{{ report.run.status }}{% endif %}</td></tr>
+        <tr><th>ID запуска</th><td>{{ report.run.run_id }}</td></tr>
+        <tr><th>Статус</th><td>{{ report.run.status|ru_status }}</td></tr>
         <tr><th>Профиль</th><td>{{ report.run.profile }}</td></tr>
-        <tr><th>Режим</th><td>{% if report.mode|default("summary") == "summary" %}краткий{% else %}{{ report.mode }}{% endif %}</td></tr>
-        <tr><th>Firewall backend</th><td>{{ report.policy_options.firewall_backend|default("не задан") }}</td></tr>
+        <tr><th>Режим</th><td>{{ report.mode|default("summary")|ru_mode }}</td></tr>
+        <tr><th>Механизм межсетевого экрана</th><td>{{ report.policy_options.firewall_backend|default("не задан") }}</td></tr>
         <tr><th>Начало проверки</th><td>{{ report.run.started_at }}</td></tr>
         <tr><th>Завершение проверки</th><td>{{ report.run.finished_at }}</td></tr>
       </tbody>
@@ -34,9 +34,9 @@
       <thead>
         <tr>
           <th>Агент</th>
-          <th>IP / status</th>
-          <th>OS</th>
-          <th>Kernel</th>
+          <th>IP / статус</th>
+          <th>ОС</th>
+          <th>Ядро</th>
           <th>Wazuh</th>
           <th>Всего</th>
           <th>ПО</th>
@@ -48,14 +48,14 @@
         {% for asset in report.scope.assets %}
         <tr>
           <td><b>{{ asset.agent_name|default(asset["agent.name"]) }}</b><br><span class="muted">{{ asset.agent_id|default(asset["agent.id"]) }}</span></td>
-          <td>{{ asset.ip|default(asset["agent.ip"]) }}<br><span class="muted">{{ asset.status|default(asset["agent.status"]) }}</span></td>
+          <td>{{ asset.ip|default(asset["agent.ip"]) }}<br><span class="muted">{{ asset.status|default(asset["agent.status"])|ru_status }}</span></td>
           <td>{{ asset.os_name|default(asset["host.os.full"]) }}<br><span class="muted">{{ asset.os_version|default(asset["host.os.version"]) }} · {{ asset.architecture|default(asset["host.architecture"]) }}</span></td>
           <td>{{ asset.kernel|default(asset["host.os.kernel"]) }}</td>
           <td>{{ asset.wazuh_version|default(asset["agent.version"]) }}</td>
           <td>{{ asset.findings_total }}</td>
           <td>{{ asset.software_vulnerabilities }}</td>
           <td>{{ asset.configuration_noncompliance }}</td>
-          <td><span class="badge severity-{{ asset.max_severity }}">{{ asset.max_severity }}</span></td>
+          <td><span class="badge severity-{{ asset.max_severity }}">{{ asset.max_severity|ru_severity }}</span></td>
         </tr>
         {% else %}
         <tr><td colspan="9">Активы не найдены в нормализованных данных отчёта.</td></tr>
@@ -66,15 +66,15 @@
 
   <section>
     <h2>3. Методика и источники данных</h2>
-    <p>Wazuh используется как источник данных о SCA/CIS-проверках, установленных пакетах, CVE и inventory. Код reporting выполняет нормализацию, классификацию, группировку, построение паспортов и приоритетного плана устранения.</p>
-    <p class="muted">Raw-данные Wazuh не встраиваются в тело PDF и сохраняются отдельными машинно-читаемыми артефактами.</p>
+    <p>Wazuh используется как источник данных о проверках SCA/CIS, установленных пакетах, CVE и инвентаризации. Модуль отчётности выполняет нормализацию, классификацию, группировку, построение паспортов и приоритетного плана устранения.</p>
+    <p class="muted">Исходные данные Wazuh не встраиваются в тело PDF и сохраняются отдельными машинно-читаемыми артефактами.</p>
   </section>
 
   <section>
     <h2>4. Сводка результатов проверки</h2>
     <div class="metrics">
       <div class="metric"><span>Исходных записей</span><b>{{ report.summary.raw_findings }}</b></div>
-      <div class="metric"><span>Уникальных findings</span><b>{{ report.summary.unique_findings }}</b></div>
+      <div class="metric"><span>Уникальных находок</span><b>{{ report.summary.unique_findings }}</b></div>
       <div class="metric"><span>Паспортов в реестре</span><b>{{ report.passport_registry_meta.total }}</b></div>
       <div class="metric"><span>Групп устранения</span><b>{{ report.summary.remediation_groups }}</b></div>
       <div class="metric"><span>Исключений</span><b>{{ report.summary.exceptions }}</b></div>
@@ -82,7 +82,7 @@
     <div class="summary-grid">
       <table>
         <thead><tr><th>Критичность</th><th>Кол-во</th></tr></thead>
-        <tbody>{% for severity, count in report.summary.by_severity.items() %}<tr><td>{{ severity }}</td><td>{{ count }}</td></tr>{% endfor %}</tbody>
+        <tbody>{% for severity, count in report.summary.by_severity.items() %}<tr><td>{{ severity|ru_severity }}</td><td>{{ count }}</td></tr>{% endfor %}</tbody>
       </table>
       <table>
         <thead><tr><th>Тип</th><th>Кол-во</th></tr></thead>
@@ -94,7 +94,7 @@
       </table>
       <table>
         <thead><tr><th>Применимость</th><th>Кол-во</th></tr></thead>
-        <tbody>{% for status, count in report.summary.by_applicability.items() %}<tr><td>{{ status }}</td><td>{{ count }}</td></tr>{% endfor %}</tbody>
+        <tbody>{% for status, count in report.summary.by_applicability.items() %}<tr><td>{{ status|ru_status }}</td><td>{{ count }}</td></tr>{% endfor %}</tbody>
       </table>
     </div>
   </section>
@@ -108,14 +108,14 @@
     <h2>6. Приоритетный план устранения</h2>
     <table class="plan-table">
       <thead>
-        <tr><th>Приоритет</th><th>Группа</th><th>Риск</th><th>Активы</th><th>Findings</th><th>Сводка</th></tr>
+        <tr><th>Приоритет</th><th>Группа</th><th>Риск</th><th>Активы</th><th>Находки</th><th>Сводка</th></tr>
       </thead>
       <tbody>
         {% for group in report.summary_remediation_plan|default(report.remediation_plan) %}
         <tr>
           <td>{{ group.priority }}</td>
           <td>{{ group.title_ru|default(group.title) }}</td>
-          <td><span class="badge severity-{{ group.severity_max }}">{{ group.severity_max }}</span></td>
+          <td><span class="badge severity-{{ group.severity_max }}">{{ group.severity_max|ru_severity }}</span></td>
           <td>{{ ", ".join(group.affected_assets) }}</td>
           <td>{{ group.affected_findings|length }}</td>
           <td>{{ group.summary }}</td>

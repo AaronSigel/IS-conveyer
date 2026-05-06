@@ -24,8 +24,8 @@
   <h1>{{ export.title }}</h1>
   <section>
     <h2>Метаданные запуска</h2>
-    <p>Run ID: {{ metadata.id }}</p>
-    <p>Статус: {{ metadata.status }}</p>
+    <p>ID запуска: {{ metadata.id }}</p>
+    <p>Статус: {{ metadata.status|ru_status }}</p>
     <p>Хосты: {{ ", ".join(metadata.hosts or []) }}</p>
     <p>Профиль: {{ metadata.profile_id }}</p>
     <p>Дата проверки: {{ metadata.started_at }}</p>
@@ -39,8 +39,8 @@
   <section class="metrics">
     <div><b>До фильтрации</b><span>{{ before_summary.total }}</span></div>
     <div><b>После фильтрации</b><span>{{ export.result_summary.total_findings_after_filter }}</span></div>
-    <div><b>Fail</b><span>{{ export.result_summary.fail }}</span></div>
-    <div><b>High</b><span>{{ export.result_summary.high }}</span></div>
+    <div><b>Ошибок</b><span>{{ export.result_summary.fail }}</span></div>
+    <div><b>Высоких</b><span>{{ export.result_summary.high }}</span></div>
   </section>
   <section>
     <h2>Паспорта выявленных уязвимостей и несоответствий</h2>
@@ -63,7 +63,7 @@
   </section>
   <section>
     <h2>Приложение: источники данных</h2>
-    <p>SCA configuration checks берутся из Wazuh SCA/API snapshot. Package vulnerabilities берутся из Wazuh indexer vulnerability snapshot. Фильтры применены только к сохранённому unified-findings.json.</p>
+    <p>Проверки конфигурации SCA берутся из снимка Wazuh SCA/API. Уязвимости пакетов берутся из снимка уязвимостей Wazuh Indexer. Фильтры применены только к сохранённому <code>unified-findings.json</code>.</p>
   </section>
 </body>
 </html>

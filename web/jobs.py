@@ -92,7 +92,7 @@ def _run_scan(run_id: str, hosts: list[str], create_default_export: bool) -> Non
         if metadata["status"] == "succeeded" and create_default_export:
             create_export(
                 run_id,
-                "Default vulnerability reports",
+                "Отчёты по уязвимостям по умолчанию",
                 {
                     "finding_type": {"op": "eq", "value": "software_vulnerability"},
                     "status": {"op": "in", "value": ["fail"]},

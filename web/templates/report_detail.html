@@ -7,7 +7,7 @@
     <p>{{ metadata.started_at or "-" }} · {{ metadata.profile_id }} · {{ ", ".join(metadata.hosts or []) }}</p>
   </div>
   <div class="actions">
-    <a class="button" href="/reports/{{ metadata.id }}/html">Открыть summary HTML</a>
+    <a class="button" href="/reports/{{ metadata.id }}/html">Открыть краткий HTML</a>
     <a class="button" href="/reports/{{ metadata.id }}/pdf">Скачать PDF</a>
     <a class="button" href="/reports/{{ metadata.id }}/normalized">normalized_report.json</a>
   </div>
@@ -22,16 +22,16 @@
   </p>
 </section>
 <section class="metrics">
-  <div><b>Total</b><span>{{ preview_summary.total }}</span></div>
-  <div><b>Fail</b><span>{{ preview_summary.fail }}</span></div>
-  <div><b>High</b><span>{{ preview_summary.high }}</span></div>
-  <div><b>Critical</b><span>{{ preview_summary.critical }}</span></div>
+  <div><b>Всего</b><span>{{ preview_summary.total }}</span></div>
+  <div><b>Ошибок</b><span>{{ preview_summary.fail }}</span></div>
+  <div><b>Высоких</b><span>{{ preview_summary.high }}</span></div>
+  <div><b>Критических</b><span>{{ preview_summary.critical }}</span></div>
 </section>
 <section class="panel">
   <h2>Дополнительные фильтры и экспорт</h2>
   <form id="filter-form" method="post" action="/reports/{{ metadata.id }}/exports" class="filter-grid">
     <input type="hidden" name="report_mode" value="split">
-    <label>Название экспорта<input name="title" value="Vulnerability reports"></label>
+    <label>Название экспорта<input name="title" value="Отчёты по уязвимостям"></label>
     <label>Категория
       <select name="preset">
         {% for key, preset in presets.items() %}
@@ -39,13 +39,13 @@
         {% endfor %}
       </select>
     </label>
-    <p class="empty">Экспорт создаст два отчёта на каждый хост: configuration checks и package vulnerabilities.</p>
+    <p class="empty">Экспорт создаст два отчёта на каждый хост: проверки конфигурации и уязвимости пакетов.</p>
     <div class="form-actions">
-      <button class="button" type="button" id="preview-btn">Preview</button>
+      <button class="button" type="button" id="preview-btn">Предпросмотр</button>
       <button class="button primary" type="submit">Создать отчёты по хостам</button>
     </div>
   </form>
-  <pre id="preview" class="preview">Preview summary: total={{ preview_summary.total }}, fail={{ preview_summary.fail }}, high={{ preview_summary.high }}, critical={{ preview_summary.critical }}</pre>
+  <pre id="preview" class="preview">Сводка предпросмотра: всего={{ preview_summary.total }}, ошибок={{ preview_summary.fail }}, высоких={{ preview_summary.high }}, критических={{ preview_summary.critical }}</pre>
 </section>
 <section id="exports" class="panel">
   <h2>Экспорты</h2>
@@ -53,7 +53,7 @@
   {% for export in exports %}
     <article class="card">
       <h3>{{ export.title }}</h3>
-      <p>{{ export.created_at }} · {{ export.mode|default("combined") }} · after={{ export.result_summary.total_findings_after_filter }}</p>
+      <p>{{ export.created_at }} · {{ export.mode|default("combined")|ru_mode }} · после фильтрации={{ export.result_summary.total_findings_after_filter }}</p>
       <a href="/reports/{{ metadata.id }}/exports/{{ export.id }}">открыть</a>
     </article>
   {% else %}
@@ -62,13 +62,13 @@
   </div>
 </section>
 <section class="panel">
-  <h2>Preview findings ({{ findings_count }}, first page only)</h2>
+  <h2>Предпросмотр находок ({{ findings_count }}, только первая страница)</h2>
   <div class="table-wrap">
     <table>
-      <thead><tr><th>Host</th><th>Source</th><th>Rule</th><th>Title</th><th>Status</th><th>Severity</th><th>CVSS</th><th>CVE</th><th>Package</th></tr></thead>
+      <thead><tr><th>Хост</th><th>Источник</th><th>Правило</th><th>Название</th><th>Статус</th><th>Критичность</th><th>CVSS</th><th>CVE</th><th>Пакет</th></tr></thead>
       <tbody>
       {% for item in findings %}
-        <tr><td>{{ item.host }}</td><td>{{ item.source }}</td><td>{{ item.rule_id }}</td><td>{{ item.title }}</td><td>{{ item.status }}</td><td>{{ item.severity }}</td><td>{{ item.cvss_base_score if item.cvss_base_score is not none else "-" }}</td><td>{{ item.cve or "-" }}</td><td>{{ item.package or "-" }}</td></tr>
+        <tr><td>{{ item.host }}</td><td>{{ item.source }}</td><td>{{ item.rule_id }}</td><td>{{ item.title }}</td><td>{{ item.status|ru_status }}</td><td>{{ item.severity|ru_severity }}</td><td>{{ item.cvss_base_score if item.cvss_base_score is not none else "-" }}</td><td>{{ item.cve or "-" }}</td><td>{{ item.package or "-" }}</td></tr>
       {% endfor %}
       </tbody>
     </table>

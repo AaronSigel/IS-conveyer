@@ -16,10 +16,10 @@
   </div>
 </section>
 <section class="metrics">
-  <div><b>Before</b><span>{{ export.result_summary.total_findings_before_filter }}</span></div>
-  <div><b>After</b><span>{{ export.result_summary.total_findings_after_filter }}</span></div>
-  <div><b>Fail</b><span>{{ export.result_summary.fail }}</span></div>
-  <div><b>High</b><span>{{ export.result_summary.high }}</span></div>
+  <div><b>До фильтрации</b><span>{{ export.result_summary.total_findings_before_filter }}</span></div>
+  <div><b>После фильтрации</b><span>{{ export.result_summary.total_findings_after_filter }}</span></div>
+  <div><b>Ошибок</b><span>{{ export.result_summary.fail }}</span></div>
+  <div><b>Высоких</b><span>{{ export.result_summary.high }}</span></div>
 </section>
 <section class="panel">
   <h2>Параметры</h2>
@@ -32,7 +32,7 @@
     {% for report_id, report in export.reports.items() %}
     <article class="card">
       <h3>{{ report.title }}</h3>
-      <p>after={{ report.result_summary.total_findings_after_filter }} · fail={{ report.result_summary.fail }} · high={{ report.result_summary.high }}</p>
+      <p>после фильтрации={{ report.result_summary.total_findings_after_filter }} · ошибок={{ report.result_summary.fail }} · высоких={{ report.result_summary.high }}</p>
       <div class="actions">
         <a class="button primary" href="/reports/{{ run_id }}/exports/{{ export.id }}/{{ report_id }}/html">HTML</a>
         {% if report.files and report.files.pdf %}

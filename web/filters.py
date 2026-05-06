@@ -4,11 +4,11 @@ from reporting.filters import apply_filters, normalize_finding, normalize_findin
 
 PRESETS = {
     "all_vulnerability": (
-        "All vulnerability",
+        "Все уязвимости ПО",
         {"finding_type": {"op": "eq", "value": "software_vulnerability"}},
     ),
     "fail_vulnerability": (
-        "Fail vulnerability",
+        "Неуспешные проверки уязвимостей",
         {
             "finding_type": {"op": "eq", "value": "software_vulnerability"},
             "status": {"op": "in", "value": ["fail"]},

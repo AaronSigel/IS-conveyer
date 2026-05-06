@@ -50,30 +50,30 @@
   <p class="note">Ограничения проверки: система анализирует конфигурацию устройства и установленное программное обеспечение, но не выполняет полноценное исследование архитектуры, организационных процессов и эксплуатации ИС.</p>
 
   <h2>2. Методика проверки</h2>
-  <p>Данные получены из Wazuh JSON, нормализованы, дедуплицированы и преобразованы в технические findings/passport. Результаты разделены на уязвимости кода по CVE и уязвимости конфигурации по SCA-проверкам.</p>
+  <p>Данные получены из Wazuh JSON, нормализованы, дедуплицированы и преобразованы в технические находки и паспорта. Результаты разделены на уязвимости кода по CVE и уязвимости конфигурации по SCA-проверкам.</p>
 
   <h2>3. Агрегированная статистика</h2>
   <div class="stats-grid">
     <div class="metric"><span>Хостов</span><b>{{ report.stats.hosts_count }}</b></div>
-    <div class="metric"><span>Исходных findings</span><b>{{ report.stats.processed_findings }}</b></div>
-    <div class="metric"><span>Уникальных findings</span><b>{{ report.stats.unique_findings }}</b></div>
+    <div class="metric"><span>Исходных находок</span><b>{{ report.stats.processed_findings }}</b></div>
+    <div class="metric"><span>Уникальных находок</span><b>{{ report.stats.unique_findings }}</b></div>
     <div class="metric"><span>В отчёте</span><b>{{ report.stats.included_findings }}</b></div>
     <div class="metric"><span>Уникальных CVE</span><b>{{ report.stats.unique_cve }}</b></div>
-    <div class="metric"><span>Config fail</span><b>{{ report.stats.configuration_failures }}</b></div>
+    <div class="metric"><span>Ошибок конфигурации</span><b>{{ report.stats.configuration_failures }}</b></div>
   </div>
   <table>
-    <thead><tr><th>Severity</th><th>Count</th></tr></thead>
+    <thead><tr><th>Критичность</th><th>Количество</th></tr></thead>
     <tbody>
       {% for severity, count in report.stats.by_severity.items() %}
-      <tr><td><span class="badge {{ severity }}">{{ severity }}</span></td><td>{{ count }}</td></tr>
+      <tr><td><span class="badge {{ severity }}">{{ severity|ru_severity }}</span></td><td>{{ count }}</td></tr>
       {% endfor %}
     </tbody>
   </table>
   <table>
-    <thead><tr><th>Status</th><th>Count</th></tr></thead>
+    <thead><tr><th>Статус</th><th>Количество</th></tr></thead>
     <tbody>
       {% for status, count in report.stats.by_status.items() %}
-      <tr><td>{{ status }}</td><td>{{ count }}</td></tr>
+      <tr><td>{{ status|ru_status }}</td><td>{{ count }}</td></tr>
       {% endfor %}
     </tbody>
   </table>
@@ -82,10 +82,10 @@
   {% for host, rows in report.software_by_host.items() %}
   <h3>{{ host }}</h3>
   <table>
-    <thead><tr><th>Host ID</th><th>Хост</th><th>ОС</th><th>Пакет</th><th>Установленная версия</th><th>Исправленная версия</th><th>CVE</th><th>Критичность</th><th>CVSS</th><th>Описание</th><th>Источник</th><th>Ссылки</th><th>Статус</th></tr></thead>
+    <thead><tr><th>ID хоста</th><th>Хост</th><th>ОС</th><th>Пакет</th><th>Установленная версия</th><th>Исправленная версия</th><th>CVE</th><th>Критичность</th><th>CVSS</th><th>Описание</th><th>Источник</th><th>Ссылки</th><th>Статус</th></tr></thead>
     <tbody>
       {% for row in rows %}
-      <tr><td>{{ row.host_id }}</td><td>{{ row.host }}</td><td>{{ row.os }}</td><td>{{ row.package }}</td><td>{{ row.installed_version }}</td><td>{{ row.fixed_version }}</td><td>{{ row.cve }}</td><td><span class="badge {{ row.severity }}">{{ row.severity }}</span></td><td>{{ row.cvss }}</td><td>{{ row.description }}</td><td>{{ row.source }}</td><td>{% for ref in row.references %}<a href="{{ ref }}">{{ ref }}</a>{% if not loop.last %}<br>{% endif %}{% endfor %}</td><td>{{ row.status }}</td></tr>
+      <tr><td>{{ row.host_id }}</td><td>{{ row.host }}</td><td>{{ row.os }}</td><td>{{ row.package }}</td><td>{{ row.installed_version }}</td><td>{{ row.fixed_version }}</td><td>{{ row.cve }}</td><td><span class="badge {{ row.severity }}">{{ row.severity|ru_severity }}</span></td><td>{{ row.cvss }}</td><td>{{ row.description }}</td><td>{{ row.source }}</td><td>{% for ref in row.references %}<a href="{{ ref }}">{{ ref }}</a>{% if not loop.last %}<br>{% endif %}{% endfor %}</td><td>{{ row.status|ru_status }}</td></tr>
       {% endfor %}
     </tbody>
   </table>
@@ -97,10 +97,10 @@
   {% for host, rows in report.configuration_by_host.items() %}
   <h3>{{ host }}</h3>
   <table>
-    <thead><tr><th>Host ID</th><th>Хост</th><th>ID проверки</th><th>Название</th><th>Описание</th><th>Критичность</th><th>Фактическое значение</th><th>Ожидаемое состояние</th><th>Рекомендация</th><th>Стандарт</th></tr></thead>
+    <thead><tr><th>ID хоста</th><th>Хост</th><th>ID проверки</th><th>Название</th><th>Описание</th><th>Критичность</th><th>Фактическое значение</th><th>Ожидаемое состояние</th><th>Рекомендация</th><th>Стандарт</th></tr></thead>
     <tbody>
       {% for row in rows %}
-      <tr><td>{{ row.host_id }}</td><td>{{ row.host }}</td><td>{{ row.check_id }}</td><td>{{ row.title }}</td><td>{{ row.description }}</td><td><span class="badge {{ row.severity }}">{{ row.severity }}</span></td><td>{{ row.actual }}</td><td>{{ row.expected }}</td><td>{{ row.remediation }}</td><td>{{ row.standard }}</td></tr>
+      <tr><td>{{ row.host_id }}</td><td>{{ row.host }}</td><td>{{ row.check_id }}</td><td>{{ row.title }}</td><td>{{ row.description }}</td><td><span class="badge {{ row.severity }}">{{ row.severity|ru_severity }}</span></td><td>{{ row.actual }}</td><td>{{ row.expected }}</td><td>{{ row.remediation }}</td><td>{{ row.standard }}</td></tr>
       {% endfor %}
     </tbody>
   </table>
@@ -113,7 +113,7 @@
     <thead><tr><th>Проблема</th><th>Тип</th><th>Критичность</th><th>Хосты</th><th>Количество</th><th>Рекомендация</th></tr></thead>
     <tbody>
       {% for item in report.priorities %}
-      <tr><td>{{ item.title }}</td><td>{{ item.type }}</td><td><span class="badge {{ item.severity }}">{{ item.severity }}</span></td><td>{{ item.assets|join(", ") }}</td><td>{{ item.count }}</td><td>{{ item.recommendation }}</td></tr>
+      <tr><td>{{ item.title }}</td><td>{{ item.type }}</td><td><span class="badge {{ item.severity }}">{{ item.severity|ru_severity }}</span></td><td>{{ item.assets|join(", ") }}</td><td>{{ item.count }}</td><td>{{ item.recommendation }}</td></tr>
       {% else %}
       <tr><td colspan="6">нет данных</td></tr>
       {% endfor %}
@@ -123,12 +123,12 @@
   <h2>7. Вывод</h2>
   <p>{{ report.conclusion }}</p>
 
-  <h2>8. Приложение A. Паспортная модель findings</h2>
+  <h2>8. Приложение A. Паспортная модель находок</h2>
   <table>
     <thead><tr><th>ID</th><th>Тип</th><th>Источник</th><th>Объект</th><th>Компонент</th><th>Описание</th><th>Условия</th><th>Опасность</th><th>Последствия</th><th>Обнаружение</th><th>Рекомендации</th><th>Ссылки</th><th>Статус</th></tr></thead>
     <tbody>
       {% for passport in report.passports %}
-      <tr><td>{{ passport.id }}</td><td>{{ passport.type }}</td><td>{{ passport.source }}</td><td>{{ passport.target_object }}</td><td>{{ passport.component }}</td><td>{{ passport.description }}</td><td>{{ passport.conditions }}</td><td><span class="badge {{ passport.severity }}">{{ passport.severity }}</span></td><td>{{ passport.impact }}</td><td>{{ passport.detection_method }}</td><td>{{ passport.remediation }}</td><td>{% for ref in passport.references %}<a href="{{ ref }}">{{ ref }}</a>{% if not loop.last %}<br>{% endif %}{% endfor %}</td><td>{{ passport.status }}</td></tr>
+      <tr><td>{{ passport.id }}</td><td>{{ passport.type }}</td><td>{{ passport.source }}</td><td>{{ passport.target_object }}</td><td>{{ passport.component }}</td><td>{{ passport.description }}</td><td>{{ passport.conditions }}</td><td><span class="badge {{ passport.severity }}">{{ passport.severity|ru_severity }}</span></td><td>{{ passport.impact }}</td><td>{{ passport.detection_method }}</td><td>{{ passport.remediation }}</td><td>{% for ref in passport.references %}<a href="{{ ref }}">{{ ref }}</a>{% if not loop.last %}<br>{% endif %}{% endfor %}</td><td>{{ passport.status|ru_status }}</td></tr>
       {% endfor %}
     </tbody>
   </table>

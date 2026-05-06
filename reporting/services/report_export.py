@@ -306,20 +306,20 @@ def compliance_passport_rows(compliance_text: str) -> list[dict[str, str]]:
             key, value = item.split(":", 1)
             rows.append({"label": key.strip(), "value": value.strip() or NO_DATA})
         elif item.strip():
-            rows.append({"label": "Compliance", "value": item.strip()})
+            rows.append({"label": "Соответствие", "value": item.strip()})
     return rows
 
 
 def wazuh_sca_passport_rows(passport: dict[str, Any]) -> list[dict[str, Any]]:
     rows = [
         {"label": "ID", "value": passport["wazuh_id"]},
-        {"label": "Title", "value": passport["wazuh_title"]},
-        {"label": "Target", "value": passport["wazuh_target"]},
-        {"label": "Result", "value": passport["wazuh_result"]},
-        {"label": "Rationale", "value": passport["wazuh_rationale"]},
-        {"label": "Remediation", "value": passport["wazuh_remediation"]},
-        {"label": "Description", "value": passport["wazuh_description"]},
-        {"label": "Checks", "value": passport["wazuh_checks"]},
+        {"label": "Название", "value": passport["wazuh_title"]},
+        {"label": "Цель", "value": passport["wazuh_target"]},
+        {"label": "Результат", "value": passport["wazuh_result"]},
+        {"label": "Обоснование", "value": passport["wazuh_rationale"]},
+        {"label": "Устранение", "value": passport["wazuh_remediation"]},
+        {"label": "Описание", "value": passport["wazuh_description"]},
+        {"label": "Проверки", "value": passport["wazuh_checks"]},
     ]
     rows.extend(compliance_passport_rows(passport["wazuh_compliance"]))
     return rows

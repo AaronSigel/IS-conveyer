@@ -2,13 +2,13 @@
 <html lang="ru">
 <head>
   <meta charset="utf-8">
-  <title>Passport registry {{ report.report_id }}</title>
+  <title>Реестр паспортов {{ report.report_id }}</title>
   <style>{% include "technical_report.css" %}</style>
 </head>
 <body>
 <main>
   <header class="report-header">
-    <p class="eyebrow">Machine-readable appendix</p>
+    <p class="eyebrow">Машинно-читаемое приложение</p>
     <h1>Реестр паспортов уязвимостей</h1>
     <p class="muted">{{ report.report_id }} · {{ report.generated_at }} · всего паспортов: {{ report.vulnerability_passports|length }}</p>
   </header>

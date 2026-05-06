@@ -14,6 +14,7 @@ from reporting.aggregation.deduplicate import deduplicate_findings
 from reporting.aggregation.severity import calculate_priority
 from reporting.builder import normalize_finding
 from reporting.common import severity_rank
+from reporting.i18n import install_jinja_filters
 from reporting.normalizers.wazuh_sca import normalize_sca_findings
 from reporting.normalizers.wazuh_vulnerabilities import normalize_vulnerability_findings
 
@@ -387,6 +388,7 @@ def _env(html: bool = False) -> Environment:
     )
     env.filters["md"] = _markdown_cell
     env.filters["json"] = _json
+    install_jinja_filters(env)
     return env
 
 

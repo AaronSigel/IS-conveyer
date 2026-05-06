@@ -30,9 +30,11 @@ except ModuleNotFoundError:
 
 from web import runs
 from web.filters import apply_filters, normalize_findings
+from web.i18n import install_jinja_filters
 
 
 templates = Jinja2Templates(directory=str(Path(__file__).resolve().parent / "templates"))
+install_jinja_filters(templates.env)
 
 
 def slugify(value: str) -> str:
@@ -76,7 +78,7 @@ def split_report_specs(base_filters: dict[str, Any], hosts: list[str]) -> dict[s
         packages = _with_filter(dict(base_filters), "host", {"op": "eq", "value": host})
         packages["finding_type"] = {"op": "eq", "value": "software_vulnerability"}
         specs[f"{safe_host}-configuration"] = {
-            "title": f"{host} - Configuration report",
+            "title": f"{host} - отчёт по конфигурации",
             "host": host,
             "html": f"{safe_host}-configuration-report.html",
             "pdf": f"{safe_host}-configuration-report.pdf",
@@ -84,7 +86,7 @@ def split_report_specs(base_filters: dict[str, Any], hosts: list[str]) -> dict[s
             "filters": configuration,
         }
         specs[f"{safe_host}-packages"] = {
-            "title": f"{host} - Package vulnerability report",
+            "title": f"{host} - отчёт по уязвимостям пакетов",
             "host": host,
             "html": f"{safe_host}-packages-report.html",
             "pdf": f"{safe_host}-packages-report.pdf",
@@ -108,7 +110,7 @@ def human_filter_text(filters: dict[str, Any]) -> str:
         "cve": "CVE",
         "package": "пакет",
         "cvss_base_score": "CVSS",
-        "finding_type": "тип finding",
+        "finding_type": "тип находки",
     }
     ops = {"in": "=", "eq": "=", "contains": "содержит", "gte": ">=", "lte": "<=", "between": "между"}
     parts = []
